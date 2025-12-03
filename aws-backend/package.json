@@ -1,0 +1,26 @@
+{
+  "name": "mychat-backend",
+  "version": "1.0.0",
+  "description": "WhatsApp Clone Backend with Serverless",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f",
+    "offline": "serverless offline start"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-offline": "^13.0.0",
+    "serverless-webpack": "^5.13.0",
+    "webpack": "^5.89.0",
+    "webpack-node-externals": "^3.0.0"
+  }
+}

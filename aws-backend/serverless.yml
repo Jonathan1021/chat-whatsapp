@@ -1,0 +1,309 @@
+service: mychat-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 30
+  environment:
+    STAGE: ${self:provider.stage}
+    USERS_TABLE: ${self:service}-${self:provider.stage}-users
+    CHATS_TABLE: ${self:service}-${self:provider.stage}-chats
+    MESSAGES_TABLE: ${self:service}-${self:provider.stage}-messages
+    MESSAGE_STATUS_TABLE: ${self:service}-${self:provider.stage}-message-status
+    CONNECTIONS_TABLE: ${self:service}-${self:provider.stage}-connections
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+          Resource:
+            - !GetAtt UsersTable.Arn
+            - !GetAtt ChatsTable.Arn
+            - !GetAtt MessagesTable.Arn
+            - !GetAtt MessageStatusTable.Arn
+            - !GetAtt ConnectionsTable.Arn
+            - !Sub '${ChatsTable.Arn}/index/*'
+            - !Sub '${MessagesTable.Arn}/index/*'
+            - !Sub '${ConnectionsTable.Arn}/index/*'
+        - Effect: Allow
+          Action:
+            - execute-api:ManageConnections
+          Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*'
+        - Effect: Allow
+          Action:
+            - cognito-idp:AdminConfirmSignUp
+          Resource: !GetAtt UserPool.Arn
+
+functions:
+  # Auth
+  login:
+    handler: src/handlers/auth.login
+    environment:
+      USER_POOL_CLIENT_ID: !Ref UserPoolClient
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: true
+
+  register:
+    handler: src/handlers/auth.register
+    environment:
+      USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      USER_POOL_ID: !Ref UserPool
+    events:
+      - http:
+          path: auth/register
+          method: post
+          cors: true
+
+  # Chats
+  getChats:
+    handler: src/handlers/chats.getChats
+    events:
+      - http:
+          path: chats
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  createChat:
+    handler: src/handlers/chats.createChat
+    events:
+      - http:
+          path: chats
+          method: post
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  # Messages
+  getMessages:
+    handler: src/handlers/messages.getMessages
+    events:
+      - http:
+          path: chats/{chatId}/messages
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  sendMessage:
+    handler: src/handlers/messages.sendMessage
+    events:
+      - http:
+          path: chats/{chatId}/messages
+          method: post
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  updateMessageStatus:
+    handler: src/handlers/messages.updateStatus
+    events:
+      - http:
+          path: messages/{messageId}/status
+          method: put
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  # WebSocket
+  wsConnect:
+    handler: src/handlers/websocket.connect
+    events:
+      - websocket:
+          route: $connect
+
+  wsDisconnect:
+    handler: src/handlers/websocket.disconnect
+    events:
+      - websocket:
+          route: $disconnect
+
+  wsMessage:
+    handler: src/handlers/websocket.message
+    events:
+      - websocket:
+          route: sendMessage
+
+resources:
+  Resources:
+    # Cognito
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${self:provider.stage}-users
+        AutoVerifiedAttributes:
+          - email
+        UsernameAttributes:
+          - email
+        Schema:
+          - Name: email
+            Required: true
+          - Name: name
+            Required: true
+
+    UserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:service}-${self:provider.stage}-client
+        UserPoolId: !Ref UserPool
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        GenerateSecret: false
+
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: CognitoAuthorizer
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId: !Ref ApiGatewayRestApi
+        ProviderARNs:
+          - !GetAtt UserPool.Arn
+
+    # DynamoDB Tables
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.USERS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    ChatsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CHATS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: chatId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: lastMessageTime
+            AttributeType: N
+        KeySchema:
+          - AttributeName: chatId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserChatsIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: lastMessageTime
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    MessagesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.MESSAGES_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: messageId
+            AttributeType: S
+          - AttributeName: chatId
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: messageId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ChatMessagesIndex
+            KeySchema:
+              - AttributeName: chatId
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    MessageStatusTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.MESSAGE_STATUS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: messageId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: messageId
+            KeyType: HASH
+          - AttributeName: userId
+            KeyType: RANGE
+
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CONNECTIONS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserConnectionsIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+  Outputs:
+    UserPoolId:
+      Value: !Ref UserPool
+    UserPoolClientId:
+      Value: !Ref UserPoolClient
+    ApiEndpoint:
+      Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}'
+    WebSocketEndpoint:
+      Value: !Sub 'wss://${WebsocketsApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}'
+
+plugins:
+  - serverless-offline

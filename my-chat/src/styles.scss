@@ -1,0 +1,59 @@
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+$my-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$violet-palette,
+    tertiary: mat.$cyan-palette,
+  ),
+));
+
+html {
+  @include mat.all-component-themes($my-theme);
+}
+
+// WhatsApp Colors
+$wa-green: #00a884;
+$wa-green-dark: #008069;
+$wa-teal: #00a884;
+$wa-bg: #f0f2f5;
+$wa-panel-bg: #ffffff;
+$wa-chat-bg: #efeae2;
+$wa-incoming-bubble: #ffffff;
+$wa-outgoing-bubble: #d9fdd3;
+$wa-border: #e9edef;
+$wa-text-primary: #111b21;
+$wa-text-secondary: #667781;
+$wa-text-tertiary: #8696a0;
+$wa-icon: #54656f;
+$wa-hover: #f5f6f6;
+$wa-selected: #f0f2f5;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: $wa-bg;
+}
+
+// Override Material styles
+.mat-mdc-form-field {
+  font-family: 'Segoe UI', Helvetica, Arial, sans-serif !important;
+}
+
+.mat-mdc-button, .mat-mdc-raised-button {
+  font-family: 'Segoe UI', Helvetica, Arial, sans-serif !important;
+}
