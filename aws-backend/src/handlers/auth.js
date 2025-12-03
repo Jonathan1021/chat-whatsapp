@@ -1,4 +1,5 @@
-const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand, AdminConfirmSignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand, AdminConfirmSignUpCommand, GetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { saveUser } = require('./users');
 
 const client = new CognitoIdentityProviderClient({});
 
@@ -16,6 +17,16 @@ exports.login = async (event) => {
     });
 
     const response = await client.send(command);
+
+    // Obtener info del usuario y guardar en DynamoDB
+    const getUserCommand = new GetUserCommand({
+      AccessToken: response.AuthenticationResult.AccessToken
+    });
+    const userInfo = await client.send(getUserCommand);
+    const userId = userInfo.UserAttributes.find(attr => attr.Name === 'sub').Value;
+    const userName = userInfo.UserAttributes.find(attr => attr.Name === 'name').Value;
+    
+    await saveUser(userId, email, userName);
 
     return {
       statusCode: 200,
@@ -35,6 +46,38 @@ exports.login = async (event) => {
   }
 };
 
+exports.refresh = async (event) => {
+  const { refreshToken } = JSON.parse(event.body);
+
+  try {
+    const command = new InitiateAuthCommand({
+      AuthFlow: 'REFRESH_TOKEN_AUTH',
+      ClientId: process.env.USER_POOL_CLIENT_ID,
+      AuthParameters: {
+        REFRESH_TOKEN: refreshToken
+      }
+    });
+
+    const response = await client.send(command);
+
+    return {
+      statusCode: 200,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({
+        token: response.AuthenticationResult.IdToken,
+        accessToken: response.AuthenticationResult.AccessToken,
+        refreshToken: refreshToken
+      })
+    };
+  } catch (error) {
+    return {
+      statusCode: 401,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: 'Invalid refresh token' })
+    };
+  }
+};
+
 exports.register = async (event) => {
   const { email, password, name } = JSON.parse(event.body);
 
@@ -49,7 +92,7 @@ exports.register = async (event) => {
       ]
     });
 
-    await client.send(signUpCommand);
+    const signUpResponse = await client.send(signUpCommand);
 
     // Auto-confirmar usuario (solo para dev)
     const confirmCommand = new AdminConfirmSignUpCommand({
@@ -58,6 +101,10 @@ exports.register = async (event) => {
     });
 
     await client.send(confirmCommand);
+
+    // Guardar usuario en DynamoDB
+    const userId = signUpResponse.UserSub;
+    await saveUser(userId, email, name);
 
     return {
       statusCode: 201,

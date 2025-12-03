@@ -1,4 +1,4 @@
-import { Component, OnInit, input, effect, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, OnInit, OnDestroy, input, effect, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -11,6 +11,7 @@ import { Observable } from 'rxjs';
 import { Message, Chat } from '../../../models';
 import { ChatService } from '../../../core/services/chat.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { WebSocketService } from '../../../core/services/websocket.service';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
 
 @Component({
@@ -35,14 +36,26 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
           @if (currentChat && currentChat.participants[0]) {
             <div class="header-left">
               <div class="avatar-container">
-                <div class="avatar">{{ currentChat.participants[0].avatar }}</div>
-                @if (currentChat.participants[0].online) {
+                <div class="avatar">
+                  @if (currentChat.isGroup) {
+                    {{ getGroupInitials(currentChat.groupName || '') }}
+                  } @else {
+                    {{ currentChat.participants[0].avatar }}
+                  }
+                </div>
+                @if (!currentChat.isGroup && currentChat.participants[0].online) {
                   <span class="online-dot"></span>
                 }
               </div>
               
               <div class="contact-info">
-                <h2 class="contact-name">{{ currentChat.participants[0].name }}</h2>
+                <h2 class="contact-name">
+                  @if (currentChat.isGroup) {
+                    {{ currentChat.groupName }}
+                  } @else {
+                    {{ currentChat.participants[0].name }}
+                  }
+                </h2>
                 <span class="contact-status">
                   @if (currentChat.isTyping) {
                     <span class="typing-status">escribiendo...</span>
@@ -81,11 +94,19 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
         </div>
 
         <!-- Messages Area (en el medio) -->
-        <div class="messages-area" #messagesContainer style="order: 2;">
+        <div class="messages-area" #messagesContainer (scroll)="onScroll()" style="order: 2;">
           <div class="messages-wrapper">
             @for (message of messages$ | async; track message.id) {
               <div class="message-row" [class.own]="message.senderId === currentUserId">
-                <div class="message-bubble" [class.outgoing]="message.senderId === currentUserId">
+                @if (currentChat?.isGroup && message.senderId !== currentUserId) {
+                  <div class="sender-info">
+                    <div class="sender-avatar">{{ message.senderAvatar }}</div>
+                  </div>
+                }
+                <div class="message-bubble" [class.outgoing]="message.senderId === currentUserId" [class.group-message]="currentChat?.isGroup && message.senderId !== currentUserId">
+                  @if (currentChat?.isGroup && message.senderId !== currentUserId) {
+                    <div class="sender-name">{{ message.senderName }}</div>
+                  }
                   <div class="message-content">
                     <span class="message-text">{{ message.content }}</span>
                   </div>
@@ -126,9 +147,34 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
           </div>
         </div>
 
+        <!-- Emoji Picker -->
+        @if (showEmojiPicker) {
+          <div class="emoji-picker">
+            <div class="emoji-header">
+              <span class="emoji-title">Emojis</span>
+              <button class="emoji-close" (click)="toggleEmojiPicker()">×</button>
+            </div>
+            <div class="emoji-categories">
+              @for (category of emojiCategories; track category.name; let i = $index) {
+                <button 
+                  class="category-btn" 
+                  [class.active]="selectedCategory === i"
+                  (click)="selectedCategory = i">
+                  {{ category.icon }}
+                </button>
+              }
+            </div>
+            <div class="emoji-grid">
+              @for (emoji of emojiCategories[selectedCategory].emojis; track emoji) {
+                <button class="emoji-btn" (click)="selectEmoji(emoji)">{{ emoji }}</button>
+              }
+            </div>
+          </div>
+        }
+
         <!-- Input Area (siempre abajo) -->
         <div class="input-area" style="order: 3; position: sticky; bottom: 0; z-index: 10;">
-          <button mat-icon-button class="action-button" aria-label="Emoji">
+          <button mat-icon-button class="action-button" aria-label="Emoji" (click)="toggleEmojiPicker()">
             <mat-icon>sentiment_satisfied_alt</mat-icon>
           </button>
           
@@ -304,11 +350,40 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
     /* Message Row */
     .message-row {
       display: flex;
+      align-items: flex-end;
       margin-bottom: 2px;
+      gap: 8px;
     }
 
     .message-row.own {
       justify-content: flex-end;
+    }
+
+    .sender-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .sender-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #00a884;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .sender-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: #00a884;
+      margin-bottom: 4px;
     }
 
     /* Message Bubble */
@@ -323,6 +398,10 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
 
     .message-bubble.outgoing {
       background: #d9fdd3;
+    }
+
+    .message-bubble.group-message {
+      background: #ffffff;
     }
 
     .message-content {
@@ -422,6 +501,159 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
       30% {
         transform: translateY(-8px);
       }
+    }
+
+    /* Emoji Picker */
+    .emoji-picker {
+      position: absolute;
+      bottom: 72px;
+      left: 16px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+      z-index: 100;
+      width: 340px;
+      animation: slideUp 0.2s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .emoji-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e9edef;
+    }
+
+    .emoji-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #111b21;
+    }
+
+    .emoji-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: #667781;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    .emoji-close:hover {
+      background: #f0f2f5;
+    }
+
+    .emoji-categories {
+      display: flex;
+      gap: 4px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #e9edef;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+    }
+
+    .emoji-categories::-webkit-scrollbar {
+      height: 2px;
+    }
+
+    .emoji-categories::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .emoji-categories::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.06);
+      border-radius: 2px;
+    }
+
+    .emoji-categories::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(0, 0, 0, 0.1);
+    }
+
+    .category-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.15s;
+      opacity: 0.6;
+    }
+
+    .category-btn:hover {
+      background: #f0f2f5;
+      opacity: 1;
+    }
+
+    .category-btn.active {
+      background: #e7f8f3;
+      opacity: 1;
+    }
+
+    .emoji-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      padding: 12px;
+      max-height: 280px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    .emoji-grid::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .emoji-grid::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .emoji-grid::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+
+    .emoji-grid::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(0, 0, 0, 0.15);
+    }
+
+    .emoji-btn {
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .emoji-btn:hover {
+      background: #f0f2f5;
+      transform: scale(1.2);
+    }
+
+    .emoji-btn:active {
+      transform: scale(1.1);
     }
 
     /* Input Area */
@@ -535,7 +767,7 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
     }
   `]
 })
-export class ChatDetailComponent implements OnInit, AfterViewChecked {
+export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy {
   chatId = input<string>('');
   
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
@@ -545,10 +777,22 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked {
   newMessage = '';
   currentUserId = '';
   private shouldScrollToBottom = false;
+  private isLoadingMore = false;
+  showEmojiPicker = false;
+  emojiCategories = [
+    { name: 'Frecuentes', icon: '🕒', emojis: ['😂', '❤️', '😍', '👍', '😊', '😘', '😎', '🎉'] },
+    { name: 'Emociones', icon: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨'] },
+    { name: 'Gestos', icon: '👍', emojis: ['👍', '👎', '👏', '🙌', '👐', '🤝', '🙏', '✌️', '🤞', '🤟', '🤘', '🤙', '👊', '✊', '🤛', '🤜', '👋', '🤚', '👆', '👇', '👈', '👉', '💆', '💇', '💅', '🤳', '💃', '🕺'] },
+    { name: 'Corazones', icon: '❤️', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐'] },
+    { name: 'Celebración', icon: '🎉', emojis: ['🎉', '🎊', '🎈', '🎁', '🏆', '🥇', '🥈', '🥉', '⭐', '🌟', '✨', '💫', '💯', '🔥', '🎂', '🍰', '🥳', '🎆', '🎇', '✨', '🎈', '🎊', '🎍', '🎏', '🎐', '🎀', '🎁'] },
+    { name: 'Objetos', icon: '⚽', emojis: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🎸', '🎹', '🎺', '🎻', '🥁', '🎷', '🎬', '🎭', '🎮', '🎯', '🎲', '🎰', '🎳', '🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓'] }
+  ];
+  selectedCategory = 0;
 
   constructor(
     private chatService: ChatService,
-    private authService: AuthService
+    private authService: AuthService,
+    private wsService: WebSocketService
   ) {
     effect(() => {
       const id = this.chatId();
@@ -560,8 +804,37 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked {
   }
 
   ngOnInit(): void {
-    this.currentUserId = this.authService.currentUser()?.id || '1';
+    const user = this.authService.currentUser();
+    this.currentUserId = user?.id || '';
     this.messages$ = this.chatService.messages$;
+    
+    this.wsService.messages$.subscribe(data => {
+      if (data?.type === 'message') {
+        const messageData = data.data;
+        
+        if (messageData.senderId !== this.currentUserId) {
+          const tempMessage: Message = {
+            id: messageData.messageId || `msg_${Date.now()}`,
+            chatId: messageData.chatId,
+            senderId: messageData.senderId,
+            content: messageData.content,
+            timestamp: messageData.timestamp,
+            status: 'sent',
+            senderName: messageData.senderName,
+            senderAvatar: messageData.senderAvatar
+          };
+          
+          this.chatService.addMessageLocally(tempMessage);
+          
+          if (messageData.chatId === this.chatId()) {
+            this.shouldScrollToBottom = true;
+          }
+        }
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
   }
 
   ngAfterViewChecked(): void {
@@ -572,21 +845,58 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked {
   }
 
   loadMessages(chatId: string): void {
-    this.chatService.getMessages(chatId).subscribe();
-    
     this.chatService.chats$.subscribe(chats => {
       this.currentChat = chats.find(c => c.id === chatId) || null;
     });
+    
+    this.chatService.setCurrentChat(chatId);
+    
+    if (!this.chatService.hasLoadedMessages(chatId)) {
+      this.chatService.getMessages(chatId).subscribe();
+    }
+  }
+
+  onScroll(): void {
+    const element = this.messagesContainer?.nativeElement;
+    if (!element || this.isLoadingMore) return;
+
+    if (element.scrollTop === 0 && this.chatService.hasMoreMessages(this.chatId())) {
+      this.isLoadingMore = true;
+      const previousHeight = element.scrollHeight;
+      
+      this.chatService.getMessages(this.chatId(), true).subscribe(() => {
+        this.isLoadingMore = false;
+        setTimeout(() => {
+          element.scrollTop = element.scrollHeight - previousHeight;
+        }, 0);
+      });
+    }
   }
 
   sendMessage(): void {
-    if (!this.newMessage.trim() || !this.chatId()) return;
+    if (!this.newMessage.trim() || !this.currentChat) return;
 
-    this.chatService.sendMessage(this.chatId(), this.newMessage, this.currentUserId)
-      .subscribe(() => {
-        this.newMessage = '';
-        this.shouldScrollToBottom = true;
-      });
+    const message = this.newMessage;
+    this.newMessage = '';
+    
+    const tempMessage: Message = {
+      id: `temp_${Date.now()}`,
+      chatId: this.chatId(),
+      senderId: this.currentUserId,
+      content: message,
+      timestamp: new Date(),
+      status: 'sent'
+    };
+    
+    this.chatService.addMessageLocally(tempMessage);
+    this.shouldScrollToBottom = true;
+    
+    if (this.currentChat.isGroup) {
+      this.wsService.sendMessage('', message, this.currentUserId, this.chatId(), true);
+    } else {
+      const recipientId = this.currentChat.participants[0].id;
+      this.wsService.sendMessage(recipientId, message, this.currentUserId);
+    }
   }
 
   private scrollToBottom(): void {
@@ -598,5 +908,23 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked {
     } catch(err) {
       console.error('Error scrolling to bottom:', err);
     }
+  }
+
+  getGroupInitials(groupName: string): string {
+    return groupName
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  }
+
+  toggleEmojiPicker(): void {
+    this.showEmojiPicker = !this.showEmojiPicker;
+  }
+
+  selectEmoji(emoji: string): void {
+    this.newMessage += emoji;
+    this.showEmojiPicker = false;
   }
 }

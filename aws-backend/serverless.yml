@@ -14,7 +14,6 @@ provider:
     USERS_TABLE: ${self:service}-${self:provider.stage}-users
     CHATS_TABLE: ${self:service}-${self:provider.stage}-chats
     MESSAGES_TABLE: ${self:service}-${self:provider.stage}-messages
-    MESSAGE_STATUS_TABLE: ${self:service}-${self:provider.stage}-message-status
     CONNECTIONS_TABLE: ${self:service}-${self:provider.stage}-connections
   iam:
     role:
@@ -33,7 +32,6 @@ provider:
             - !GetAtt UsersTable.Arn
             - !GetAtt ChatsTable.Arn
             - !GetAtt MessagesTable.Arn
-            - !GetAtt MessageStatusTable.Arn
             - !GetAtt ConnectionsTable.Arn
             - !Sub '${ChatsTable.Arn}/index/*'
             - !Sub '${MessagesTable.Arn}/index/*'
@@ -70,6 +68,16 @@ functions:
           method: post
           cors: true
 
+  refresh:
+    handler: src/handlers/auth.refresh
+    environment:
+      USER_POOL_CLIENT_ID: !Ref UserPoolClient
+    events:
+      - http:
+          path: auth/refresh
+          method: post
+          cors: true
+
   # Chats
   getChats:
     handler: src/handlers/chats.getChats
@@ -82,11 +90,22 @@ functions:
             type: COGNITO_USER_POOLS
             authorizerId: !Ref ApiGatewayAuthorizer
 
-  createChat:
-    handler: src/handlers/chats.createChat
+  getUsers:
+    handler: src/handlers/users.getUsers
     events:
       - http:
-          path: chats
+          path: users
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  createGroup:
+    handler: src/handlers/groups.createGroup
+    events:
+      - http:
+          path: groups
           method: post
           cors: true
           authorizer:
@@ -100,28 +119,6 @@ functions:
       - http:
           path: chats/{chatId}/messages
           method: get
-          cors: true
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId: !Ref ApiGatewayAuthorizer
-
-  sendMessage:
-    handler: src/handlers/messages.sendMessage
-    events:
-      - http:
-          path: chats/{chatId}/messages
-          method: post
-          cors: true
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId: !Ref ApiGatewayAuthorizer
-
-  updateMessageStatus:
-    handler: src/handlers/messages.updateStatus
-    events:
-      - http:
-          path: messages/{messageId}/status
-          method: put
           cors: true
           authorizer:
             type: COGNITO_USER_POOLS
@@ -254,22 +251,6 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
-
-    MessageStatusTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:provider.environment.MESSAGE_STATUS_TABLE}
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: messageId
-            AttributeType: S
-          - AttributeName: userId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: messageId
-            KeyType: HASH
-          - AttributeName: userId
-            KeyType: RANGE
 
     ConnectionsTable:
       Type: AWS::DynamoDB::Table

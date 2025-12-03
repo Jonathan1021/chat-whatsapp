@@ -7,4 +7,6 @@ export interface Chat {
   lastMessage?: Message;
   unreadCount: number;
   isTyping: boolean;
+  isGroup?: boolean;
+  groupName?: string;
 }

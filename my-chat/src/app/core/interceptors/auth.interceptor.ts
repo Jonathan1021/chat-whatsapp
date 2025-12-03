@@ -8,7 +8,7 @@ import { AuthService } from '../services/auth.service';
  * PRODUCCIÓN: Obtener token real de localStorage o cookie
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
 
   if (token) {
     const cloned = req.clone({

@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -13,7 +13,7 @@ import { AuthService } from '../../core/services/auth.service';
   selector: 'app-login',
   standalone: true,
   imports: [
-    FormsModule,
+    ReactiveFormsModule,
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
@@ -38,12 +38,15 @@ import { AuthService } from '../../core/services/auth.service';
           <h2>Iniciar sesión en WhatsApp</h2>
           <p class="subtitle">Ingresa tus credenciales para continuar</p>
 
-          <form (ngSubmit)="onLogin()" class="login-form">
+          <form [formGroup]="loginForm" (ngSubmit)="onLogin()" class="login-form">
             <div class="input-group">
               <mat-form-field appearance="outline" class="full-width">
                 <mat-icon matIconPrefix>email</mat-icon>
                 <mat-label>Correo electrónico</mat-label>
-                <input matInput type="email" [(ngModel)]="email" name="email" required>
+                <input matInput type="email" formControlName="email">
+                @if (loginForm.get('email')?.invalid && loginForm.get('email')?.touched) {
+                  <mat-error>Ingresa un correo válido</mat-error>
+                }
               </mat-form-field>
             </div>
 
@@ -51,11 +54,17 @@ import { AuthService } from '../../core/services/auth.service';
               <mat-form-field appearance="outline" class="full-width">
                 <mat-icon matIconPrefix>lock</mat-icon>
                 <mat-label>Contraseña</mat-label>
-                <input matInput type="password" [(ngModel)]="password" name="password" required>
+                <input matInput [type]="hidePassword() ? 'password' : 'text'" formControlName="password">
+                <button mat-icon-button matIconSuffix type="button" (click)="hidePassword.set(!hidePassword())" [attr.aria-label]="'Ocultar contraseña'">
+                  <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
+                @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
+                  <mat-error>La contraseña es requerida</mat-error>
+                }
               </mat-form-field>
             </div>
 
-            <button mat-raised-button class="login-button" type="submit" [disabled]="loading()">
+            <button mat-raised-button class="login-button" type="submit" [disabled]="loginForm.invalid || loading()">
               @if (loading()) {
                 <mat-spinner diameter="20" class="spinner"></mat-spinner>
               } @else {
@@ -64,11 +73,14 @@ import { AuthService } from '../../core/services/auth.service';
             </button>
           </form>
 
-
+          @if (errorMessage()) {
+            <div class="error-message">{{ errorMessage() }}</div>
+          }
         </div>
       </div>
 
       <div class="login-footer">
+        <p>¿No tienes cuenta? <a class="register-link" (click)="goToRegister()">Regístrate aquí</a></p>
         <p>🔒 Tus mensajes personales están protegidos con cifrado de extremo a extremo</p>
       </div>
     </div>
@@ -162,18 +174,19 @@ import { AuthService } from '../../core/services/auth.service';
     .login-button {
       width: 100%;
       height: 48px;
-      background: #00a884;
-      color: white;
+      background: #00a884 !important;
+      color: white !important;
       font-size: 16px;
       font-weight: 500;
       border-radius: 8px;
       text-transform: none;
       letter-spacing: 0.5px;
-      box-shadow: none;
+      box-shadow: none !important;
     }
 
     .login-button:hover:not([disabled]) {
-      background: #008069;
+      background: #008069 !important;
+      color: white !important;
     }
 
     .login-button:disabled {
@@ -190,6 +203,16 @@ import { AuthService } from '../../core/services/auth.service';
       stroke: white;
     }
 
+    .error-message {
+      background: #fee;
+      color: #c00;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 16px;
+      text-align: center;
+      font-size: 14px;
+    }
+
 
 
     .login-footer {
@@ -202,6 +225,18 @@ import { AuthService } from '../../core/services/auth.service';
       color: #667781;
       font-size: 13px;
       line-height: 1.5;
+      margin: 8px 0;
+    }
+
+    .register-link {
+      color: #00a884;
+      cursor: pointer;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .register-link:hover {
+      text-decoration: underline;
     }
 
     @media (max-width: 600px) {
@@ -221,23 +256,46 @@ import { AuthService } from '../../core/services/auth.service';
   `]
 })
 export class LoginComponent {
-  email = 'juan@test.com';
-  password = 'password';
   loading = signal(false);
+  errorMessage = signal('');
+  hidePassword = signal(true);
+  loginForm: FormGroup;
 
   constructor(
+    private fb: FormBuilder,
     private authService: AuthService,
     private router: Router
-  ) {}
+  ) {
+    this.loginForm = this.fb.group({
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', Validators.required]
+    });
+  }
 
   onLogin(): void {
+    if (this.loginForm.invalid) return;
+    
     this.loading.set(true);
-    this.authService.login(this.email, this.password).subscribe({
+    this.errorMessage.set('');
+    const { email, password } = this.loginForm.value;
+    
+    this.authService.login(email, password).subscribe({
       next: () => {
         this.loading.set(false);
         this.router.navigate(['/chats']);
       },
-      error: () => this.loading.set(false)
+      error: (err) => {
+        this.loading.set(false);
+        if (err.status === 401) {
+          this.errorMessage.set('Credenciales incorrectas. Verifica tu email y contraseña.');
+        } else {
+          this.errorMessage.set('Error al iniciar sesión. Intenta nuevamente.');
+        }
+      }
     });
+  }
+
+  goToRegister(): void {
+    this.router.navigate(['/register']);
   }
 }

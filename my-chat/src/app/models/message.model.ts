@@ -7,4 +7,6 @@ export interface Message {
   content: string;
   timestamp: Date;
   status: MessageStatus;
+  senderName?: string;
+  senderAvatar?: string;
 }

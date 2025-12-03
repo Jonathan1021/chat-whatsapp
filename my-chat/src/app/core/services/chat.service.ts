@@ -8,9 +8,14 @@ import { environment } from '../../../environments/environment';
   providedIn: 'root'
 })
 export class ChatService {
-  // BehaviorSubject para estado reactivo
   private chatsSubject = new BehaviorSubject<Chat[]>([]);
   private messagesSubject = new BehaviorSubject<Message[]>([]);
+  private usersCache: any[] | null = null;
+  private loadedChatMessages = new Set<string>();
+  private messageLastKeys = new Map<string, string | null>();
+  private messagesByChat = new Map<string, Message[]>();
+  private currentChatId: string = '';
+  private unreadCounts = new Map<string, number>();
 
   chats$ = this.chatsSubject.asObservable();
   messages$ = this.messagesSubject.asObservable();
@@ -18,79 +23,130 @@ export class ChatService {
 
   constructor(private http: HttpClient) {}
 
-  private mockChats: Chat[] = [
-    {
-      id: '1',
-      participants: [
-        { id: '2', name: 'María García', email: 'maria@test.com', avatar: '👩', online: true }
-      ],
-      lastMessage: { id: '1', chatId: '1', senderId: '2', content: 'Hola! ¿Cómo estás?', timestamp: new Date(), status: 'read' },
-      unreadCount: 0,
-      isTyping: false
-    },
-    {
-      id: '2',
-      participants: [
-        { id: '3', name: 'Carlos López', email: 'carlos@test.com', avatar: '👨‍💼', online: false, lastSeen: new Date(Date.now() - 3600000) }
-      ],
-      lastMessage: { id: '2', chatId: '2', senderId: '3', content: 'Nos vemos mañana', timestamp: new Date(Date.now() - 7200000), status: 'delivered' },
-      unreadCount: 2,
-      isTyping: false
-    }
-  ];
-
-  private mockMessages: { [chatId: string]: Message[] } = {
-    '1': [
-      { id: '1', chatId: '1', senderId: '2', content: 'Hola! ¿Cómo estás?', timestamp: new Date(Date.now() - 3600000), status: 'read' },
-      { id: '2', chatId: '1', senderId: '1', content: 'Muy bien, gracias! ¿Y tú?', timestamp: new Date(Date.now() - 3000000), status: 'read' },
-      { id: '3', chatId: '1', senderId: '2', content: 'Genial! Trabajando en el proyecto', timestamp: new Date(Date.now() - 1800000), status: 'read' }
-    ],
-    '2': [
-      { id: '4', chatId: '2', senderId: '3', content: '¿Tienes tiempo para una reunión?', timestamp: new Date(Date.now() - 7200000), status: 'delivered' },
-      { id: '5', chatId: '2', senderId: '3', content: 'Nos vemos mañana', timestamp: new Date(Date.now() - 7200000), status: 'delivered' }
-    ]
-  };
+  getCurrentUserId(): string {
+    const user = sessionStorage.getItem('currentUser');
+    return user ? JSON.parse(user).id : '';
+  }
 
   getChats(): Observable<Chat[]> {
     return this.http.get<Chat[]>(`${this.apiUrl}/chats`).pipe(
-      tap(chats => this.chatsSubject.next(chats.length ? chats : this.mockChats))
+      tap(chats => this.chatsSubject.next(chats))
     );
   }
 
-  getMessages(chatId: string): Observable<Message[]> {
-    return this.http.get<Message[]>(`${this.apiUrl}/chats/${chatId}/messages`).pipe(
-      tap(msgs => this.messagesSubject.next(msgs.length ? msgs : (this.mockMessages[chatId] || [])))
-    );
-  }
-
-  sendMessage(chatId: string, content: string, senderId: string): Observable<Message> {
-    return this.http.post<Message>(`${this.apiUrl}/chats/${chatId}/messages`, { content }).pipe(
-      tap(message => {
-        const currentMessages = this.messagesSubject.value;
-        this.messagesSubject.next([...currentMessages, message]);
-        setTimeout(() => this.updateMessageStatus(message.id, 'delivered'), 1000);
-        setTimeout(() => this.updateMessageStatus(message.id, 'read'), 2000);
+  getMessages(chatId: string, loadMore: boolean = false): Observable<{messages: Message[], lastKey: string | null}> {
+    const lastKey = loadMore ? this.messageLastKeys.get(chatId) : null;
+    const params = lastKey ? `?lastKey=${lastKey}` : '';
+    
+    return this.http.get<{messages: Message[], lastKey: string | null}>(`${this.apiUrl}/chats/${chatId}/messages${params}`).pipe(
+      tap(response => {
+        const messages = Array.isArray(response) ? response : response.messages;
+        const lastKeyValue = Array.isArray(response) ? null : response.lastKey;
+        
+        const currentMessages = loadMore ? (this.messagesByChat.get(chatId) || []) : [];
+        const newMessages = [...messages, ...currentMessages];
+        this.messagesByChat.set(chatId, newMessages);
+        this.messageLastKeys.set(chatId, lastKeyValue);
+        
+        if (chatId === this.currentChatId) {
+          this.messagesSubject.next(newMessages);
+        }
+        
+        if (!loadMore) {
+          this.loadedChatMessages.add(chatId);
+        }
       })
     );
   }
 
-  /**
-   * Actualizar estado del mensaje
-   */
-  private updateMessageStatus(messageId: string, status: MessageStatus): void {
-    const messages = this.messagesSubject.value.map(m =>
-      m.id === messageId ? { ...m, status } : m
-    );
+  setCurrentChat(chatId: string): void {
+    this.currentChatId = chatId;
+    const messages = this.messagesByChat.get(chatId) || [];
     this.messagesSubject.next(messages);
+    this.unreadCounts.set(chatId, 0);
+    this.updateChatUnreadCount(chatId, 0);
   }
 
-  /**
-   * Simular que el contacto está escribiendo
-   */
-  setTyping(chatId: string, isTyping: boolean): void {
-    const chats = this.chatsSubject.value.map(c =>
-      c.id === chatId ? { ...c, isTyping } : c
+  hasLoadedMessages(chatId: string): boolean {
+    return this.loadedChatMessages.has(chatId);
+  }
+
+  hasMoreMessages(chatId: string): boolean {
+    return this.messageLastKeys.get(chatId) !== null;
+  }
+
+  getUsers(): Observable<any[]> {
+    if (this.usersCache) {
+      return new Observable(observer => {
+        observer.next(this.usersCache!);
+        observer.complete();
+      });
+    }
+    return this.http.get<any[]>(`${this.apiUrl}/users`).pipe(
+      tap(users => this.usersCache = users)
     );
-    this.chatsSubject.next(chats);
+  }
+
+  addTemporaryChat(chatId: string, user: any): void {
+    const currentChats = this.chatsSubject.value;
+    const exists = currentChats.find(c => c.id === chatId);
+    
+    if (!exists) {
+      const tempChat: Chat = {
+        id: chatId,
+        participants: [{
+          id: user.userId,
+          name: user.name,
+          email: user.email,
+          avatar: user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2),
+          online: false
+        }],
+        lastMessage: undefined,
+        unreadCount: 0,
+        isTyping: false
+      };
+      this.chatsSubject.next([tempChat, ...currentChats]);
+    }
+  }
+
+  addMessageLocally(message: Message): void {
+    const chatMessages = this.messagesByChat.get(message.chatId) || [];
+    const newMessages = [...chatMessages, message];
+    this.messagesByChat.set(message.chatId, newMessages);
+    
+    if (message.chatId === this.currentChatId) {
+      this.messagesSubject.next(newMessages);
+    } else {
+      const currentCount = this.unreadCounts.get(message.chatId) || 0;
+      const newCount = currentCount + 1;
+      this.unreadCounts.set(message.chatId, newCount);
+      this.updateChatUnreadCount(message.chatId, newCount);
+    }
+  }
+
+  private updateChatUnreadCount(chatId: string, count: number): void {
+    const chats = this.chatsSubject.value;
+    const updatedChats = chats.map(chat => 
+      chat.id === chatId ? { ...chat, unreadCount: count } : chat
+    );
+    this.chatsSubject.next(updatedChats);
+  }
+
+  clearMessages(): void {
+    this.messagesSubject.next([]);
+  }
+
+  resetChatMessages(chatId: string): void {
+    this.loadedChatMessages.delete(chatId);
+    this.messageLastKeys.delete(chatId);
+  }
+
+  createGroup(name: string, memberIds: string[]): Observable<Chat> {
+    return this.http.post<Chat>(`${this.apiUrl}/groups`, { name, memberIds }).pipe(
+      tap(group => {
+        const currentChats = this.chatsSubject.value;
+        this.chatsSubject.next([group, ...currentChats]);
+      })
+    );
   }
 }
