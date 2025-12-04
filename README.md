@@ -177,9 +177,33 @@ npx serverless deploy
 cd my-chat
 npm install
 
-# Configurar environment
-# Editar src/environments/environment.ts con URLs del backend
+# Crear archivos de configuración
+# Crear src/environments/environment.ts
+```
 
+**src/environments/environment.ts**
+```typescript
+export const environment = {
+  production: false,
+  apiUrl: 'YOUR_API_GATEWAY_URL',  // Del output de serverless deploy
+  wsUrl: 'YOUR_WEBSOCKET_URL',     // Del output de serverless deploy
+  cognitoUserPoolId: 'YOUR_USER_POOL_ID',
+  cognitoClientId: 'YOUR_CLIENT_ID'
+};
+```
+
+**src/environments/environment.prod.ts**
+```typescript
+export const environment = {
+  production: true,
+  apiUrl: 'YOUR_API_GATEWAY_URL',
+  wsUrl: 'YOUR_WEBSOCKET_URL',
+  cognitoUserPoolId: 'YOUR_USER_POOL_ID',
+  cognitoClientId: 'YOUR_CLIENT_ID'
+};
+```
+
+```bash
 # Desarrollo
 npm start
 
