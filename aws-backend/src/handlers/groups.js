@@ -319,10 +319,16 @@ exports.leaveGroup = async (event) => {
       }))
     ));
 
-    // Eliminar el registro del usuario que sale
-    await docClient.send(new DeleteCommand({
+    // Marcar el registro del usuario como removed en lugar de eliminarlo
+    await docClient.send(new UpdateCommand({
       TableName: process.env.CHATS_TABLE,
-      Key: { chatId: `${groupId}#${userId}` }
+      Key: { chatId: `${groupId}#${userId}` },
+      UpdateExpression: 'SET #removed = :removed, members = :members',
+      ExpressionAttributeNames: { '#removed': 'removed' },
+      ExpressionAttributeValues: { 
+        ':removed': true,
+        ':members': [userId]
+      }
     }));
 
     return {
