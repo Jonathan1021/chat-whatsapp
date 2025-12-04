@@ -320,7 +320,7 @@ export class GroupInfoDialogComponent implements OnInit {
     
     this.chatService.promoteToAdmin(this.data.chat.id, memberId).subscribe({
       next: () => {
-        this.dialogRef.close({ reload: true });
+        this.dialogRef.close({ reload: true, reloadMessages: true });
       },
       error: (err) => console.error('Error promoting to admin:', err)
     });
@@ -331,7 +331,7 @@ export class GroupInfoDialogComponent implements OnInit {
     
     this.chatService.demoteFromAdmin(this.data.chat.id, memberId).subscribe({
       next: () => {
-        this.dialogRef.close({ reload: true });
+        this.dialogRef.close({ reload: true, reloadMessages: true });
       },
       error: (err) => console.error('Error demoting from admin:', err)
     });
