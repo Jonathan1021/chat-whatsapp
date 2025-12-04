@@ -110,40 +110,46 @@ import { RemoveMemberDialogComponent } from './remove-member-dialog.component';
         <div class="messages-area" #messagesContainer (scroll)="onScroll()" style="order: 2;">
           <div class="messages-wrapper">
             @for (message of messages$ | async; track message.id) {
-              <div class="message-row" [class.own]="message.senderId === currentUserId">
-                @if (currentChat && currentChat.isGroup && message.senderId !== currentUserId) {
-                  <div class="sender-info">
-                    <div class="sender-avatar">{{ message.senderAvatar }}</div>
-                  </div>
-                }
-                <div class="message-bubble" [class.outgoing]="message.senderId === currentUserId" [class.group-message]="currentChat && currentChat.isGroup && message.senderId !== currentUserId">
-                  @if (currentChat && currentChat.isGroup && message.senderId !== currentUserId) {
-                    <div class="sender-name">{{ message.senderName }}</div>
-                  }
-                  <div class="message-content">
-                    <span class="message-text">{{ message.content }}</span>
-                  </div>
-                  <div class="message-footer">
-                    <span class="message-time">{{ message.timestamp | date:'shortTime' }}</span>
-                    @if (message.senderId === currentUserId) {
-                      <span class="message-status">
-                        @switch (message.status) {
-                          @case ('sent') {
-                            <mat-icon class="status-icon">done</mat-icon>
-                          }
-                          @case ('delivered') {
-                            <mat-icon class="status-icon">done_all</mat-icon>
-                          }
-                          @case ('read') {
-                            <mat-icon class="status-icon read">done_all</mat-icon>
-                          }
-                        }
-                      </span>
-                    }
-                  </div>
-                  <div class="message-tail" [class.outgoing]="message.senderId === currentUserId"></div>
+              @if (message.type === 'system') {
+                <div class="system-message">
+                  <span>{{ getSystemMessage(message) }}</span>
                 </div>
-              </div>
+              } @else {
+                <div class="message-row" [class.own]="message.senderId === currentUserId">
+                  @if (currentChat && currentChat.isGroup && message.senderId !== currentUserId) {
+                    <div class="sender-info">
+                      <div class="sender-avatar">{{ message.senderAvatar }}</div>
+                    </div>
+                  }
+                  <div class="message-bubble" [class.outgoing]="message.senderId === currentUserId" [class.group-message]="currentChat && currentChat.isGroup && message.senderId !== currentUserId">
+                    @if (currentChat && currentChat.isGroup && message.senderId !== currentUserId) {
+                      <div class="sender-name">{{ message.senderName }}</div>
+                    }
+                    <div class="message-content">
+                      <span class="message-text">{{ message.content }}</span>
+                    </div>
+                    <div class="message-footer">
+                      <span class="message-time">{{ message.timestamp | date:'shortTime' }}</span>
+                      @if (message.senderId === currentUserId) {
+                        <span class="message-status">
+                          @switch (message.status) {
+                            @case ('sent') {
+                              <mat-icon class="status-icon">done</mat-icon>
+                            }
+                            @case ('delivered') {
+                              <mat-icon class="status-icon">done_all</mat-icon>
+                            }
+                            @case ('read') {
+                              <mat-icon class="status-icon read">done_all</mat-icon>
+                            }
+                          }
+                        </span>
+                      }
+                    </div>
+                    <div class="message-tail" [class.outgoing]="message.senderId === currentUserId"></div>
+                  </div>
+                </div>
+              }
             }
             
             @if (currentChat && currentChat.isTyping) {
@@ -805,6 +811,22 @@ import { RemoveMemberDialogComponent } from './remove-member-dialog.component';
       font-size: 13px;
     }
 
+    /* System Message */
+    .system-message {
+      display: flex;
+      justify-content: center;
+      margin: 12px 0;
+    }
+
+    .system-message span {
+      background: rgba(0, 0, 0, 0.05);
+      color: #667781;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .messages-area {
@@ -1027,5 +1049,20 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
         });
       }
     });
+  }
+
+  getSystemMessage(message: Message): string {
+    if (!message.systemAction) return '';
+    
+    switch (message.systemAction) {
+      case 'group_created':
+        return `${message.senderName} creó el grupo`;
+      case 'member_added':
+        return `${message.senderName} agregó a ${message.affectedUserName}`;
+      case 'member_removed':
+        return `${message.senderName} eliminó a ${message.affectedUserName}`;
+      default:
+        return '';
+    }
   }
 }

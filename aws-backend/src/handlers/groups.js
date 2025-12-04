@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand, DeleteCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -28,6 +28,31 @@ exports.createGroup = async (event) => {
         }
       }))
     ));
+
+    // Obtener info del creador
+    const creatorInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const creatorName = creatorInfo.Item?.name || 'Usuario';
+
+    // Crear mensaje de sistema para creación del grupo
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await docClient.send(new PutCommand({
+      TableName: process.env.MESSAGES_TABLE,
+      Item: {
+        messageId,
+        chatId: groupId,
+        senderId: userId,
+        senderName: creatorName,
+        content: `${creatorName} creó el grupo`,
+        timestamp: now,
+        type: 'system',
+        systemAction: 'group_created',
+        createdAt: new Date().toISOString()
+      }
+    }));
 
     return {
       statusCode: 201,
@@ -106,6 +131,43 @@ exports.addMembers = async (event) => {
       }))
     ));
 
+    // Obtener info del usuario que agrega
+    const adderInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const adderName = adderInfo.Item?.name || 'Usuario';
+    const now = Date.now();
+
+    // Crear mensajes de sistema para cada miembro agregado
+    await Promise.all(newMembers.map(async (memberId) => {
+      const memberInfo = await docClient.send(new GetCommand({
+        TableName: process.env.USERS_TABLE,
+        Key: { userId: memberId }
+      }));
+
+      const memberName = memberInfo.Item?.name || 'Usuario';
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      return docClient.send(new PutCommand({
+        TableName: process.env.MESSAGES_TABLE,
+        Item: {
+          messageId,
+          chatId: groupId,
+          senderId: userId,
+          senderName: adderName,
+          content: `${adderName} agregó a ${memberName}`,
+          timestamp: now,
+          type: 'system',
+          systemAction: 'member_added',
+          affectedUserId: memberId,
+          affectedUserName: memberName,
+          createdAt: new Date().toISOString()
+        }
+      }));
+    }));
+
     return {
       statusCode: 200,
       headers: { 'Access-Control-Allow-Origin': '*' },
@@ -162,6 +224,39 @@ exports.removeMember = async (event) => {
       ExpressionAttributeValues: { 
         ':members': [memberId],
         ':removed': true
+      }
+    }));
+
+    // Obtener info del usuario que elimina y del eliminado
+    const removerInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const removedInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId: memberId }
+    }));
+
+    const removerName = removerInfo.Item?.name || 'Usuario';
+    const removedName = removedInfo.Item?.name || 'Usuario';
+
+    // Crear mensaje de sistema
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await docClient.send(new PutCommand({
+      TableName: process.env.MESSAGES_TABLE,
+      Item: {
+        messageId,
+        chatId: groupId,
+        senderId: userId,
+        senderName: removerName,
+        content: `${removerName} eliminó a ${removedName}`,
+        timestamp: Date.now(),
+        type: 'system',
+        systemAction: 'member_removed',
+        affectedUserId: memberId,
+        affectedUserName: removedName,
+        createdAt: new Date().toISOString()
       }
     }));
 

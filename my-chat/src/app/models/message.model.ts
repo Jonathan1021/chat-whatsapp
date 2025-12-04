@@ -1,4 +1,6 @@
 export type MessageStatus = 'sent' | 'delivered' | 'read';
+export type MessageType = 'text' | 'system';
+export type SystemMessageAction = 'member_added' | 'member_removed' | 'group_created';
 
 export interface Message {
   id: string;
@@ -9,4 +11,8 @@ export interface Message {
   status: MessageStatus;
   senderName?: string;
   senderAvatar?: string;
+  type?: MessageType;
+  systemAction?: SystemMessageAction;
+  affectedUserId?: string;
+  affectedUserName?: string;
 }
