@@ -172,11 +172,33 @@ export class ChatService {
   }
 
   promoteToAdmin(groupId: string, memberId: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/groups/${groupId}/admins/${memberId}`, {});
+    return this.http.post(`${this.apiUrl}/groups/${groupId}/admins/${memberId}`, {}).pipe(
+      tap(() => {
+        const chats = this.chatsSubject.value;
+        const updatedChats = chats.map(chat => {
+          if (chat.id === groupId) {
+            return { ...chat, admins: [...(chat.admins || []), memberId] };
+          }
+          return chat;
+        });
+        this.chatsSubject.next(updatedChats);
+      })
+    );
   }
 
   demoteFromAdmin(groupId: string, memberId: string): Observable<any> {
-    return this.http.delete(`${this.apiUrl}/groups/${groupId}/admins/${memberId}`);
+    return this.http.delete(`${this.apiUrl}/groups/${groupId}/admins/${memberId}`).pipe(
+      tap(() => {
+        const chats = this.chatsSubject.value;
+        const updatedChats = chats.map(chat => {
+          if (chat.id === groupId) {
+            return { ...chat, admins: (chat.admins || []).filter(id => id !== memberId) };
+          }
+          return chat;
+        });
+        this.chatsSubject.next(updatedChats);
+      })
+    );
   }
 
   isUserRemovedFromGroup(chatId: string): boolean {
