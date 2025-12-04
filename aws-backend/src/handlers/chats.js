@@ -57,7 +57,9 @@ exports.getChats = async (event) => {
         lastMessage: null,
         unreadCount: 0,
         isTyping: false,
-        removed: chat.removed || false
+        removed: chat.removed || false,
+        role: chat.role,
+        admins: chat.admins || []
       };
     }
     

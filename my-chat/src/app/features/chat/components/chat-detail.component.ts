@@ -85,14 +85,16 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                     <mat-icon>info</mat-icon>
                     <span>Info del grupo</span>
                   </button>
-                  <button mat-menu-item (click)="addGroupMembers()">
-                    <mat-icon>person_add</mat-icon>
-                    <span>Agregar participantes</span>
-                  </button>
-                  <button mat-menu-item (click)="removeGroupMember()">
-                    <mat-icon>person_remove</mat-icon>
-                    <span>Eliminar participante</span>
-                  </button>
+                  @if (currentChat.role === 'admin') {
+                    <button mat-menu-item (click)="addGroupMembers()">
+                      <mat-icon>person_add</mat-icon>
+                      <span>Agregar participantes</span>
+                    </button>
+                    <button mat-menu-item (click)="removeGroupMember()">
+                      <mat-icon>person_remove</mat-icon>
+                      <span>Eliminar participante</span>
+                    </button>
+                  }
                 } @else {
                   <button mat-menu-item>
                     <mat-icon>info</mat-icon>

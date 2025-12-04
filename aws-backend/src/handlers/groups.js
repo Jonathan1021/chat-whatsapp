@@ -24,6 +24,8 @@ exports.createGroup = async (event) => {
           groupDescription: description,
           isGroup: true,
           members: allMembers,
+          admins: [userId],
+          role: memberId === userId ? 'admin' : 'member',
           lastMessageTime: now,
           createdAt: new Date().toISOString()
         }
@@ -101,6 +103,15 @@ exports.addMembers = async (event) => {
       };
     }
 
+    // Verificar que el usuario sea admin
+    if (groupChat.role !== 'admin') {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Only admins can add members' })
+      };
+    }
+
     const existingMembers = groupChat.members || [];
     const newMembers = memberIds.filter(id => !existingMembers.includes(id));
     const updatedMembers = [...existingMembers, ...newMembers];
@@ -124,8 +135,11 @@ exports.addMembers = async (event) => {
           userId: memberId,
           groupId: groupId,
           groupName: groupChat.groupName,
+          groupDescription: groupChat.groupDescription,
           isGroup: true,
           members: updatedMembers,
+          admins: groupChat.admins || [],
+          role: 'member',
           lastMessageTime: Date.now(),
           createdAt: new Date().toISOString()
         }
@@ -202,6 +216,15 @@ exports.removeMember = async (event) => {
         statusCode: 404,
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    // Verificar que el usuario sea admin
+    if (groupChat.role !== 'admin') {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Only admins can remove members' })
       };
     }
 
@@ -295,6 +318,15 @@ exports.updateInfo = async (event) => {
         statusCode: 404,
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    // Verificar que el usuario sea admin
+    if (groupChat.role !== 'admin') {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Only admins can update group info' })
       };
     }
 

@@ -24,9 +24,11 @@ import { Chat } from '../../../models';
             </mat-form-field>
           } @else {
             <h3>{{ groupName }}</h3>
-            <button mat-icon-button class="edit-name-btn" (click)="isEditingName = true">
-              <mat-icon>edit</mat-icon>
-            </button>
+            @if (isAdmin) {
+              <button mat-icon-button class="edit-name-btn" (click)="isEditingName = true">
+                <mat-icon>edit</mat-icon>
+              </button>
+            }
           }
         </div>
 
@@ -47,10 +49,12 @@ import { Chat } from '../../../models';
             </mat-form-field>
           } @else {
             <p class="description-text">{{ description || 'Sin descripción' }}</p>
-            <button mat-button color="primary" (click)="isEditingDesc = true">
-              <mat-icon>edit</mat-icon>
-              Editar descripción
-            </button>
+            @if (isAdmin) {
+              <button mat-button color="primary" (click)="isEditingDesc = true">
+                <mat-icon>edit</mat-icon>
+                Editar descripción
+              </button>
+            }
           }
         </div>
 
@@ -63,7 +67,12 @@ import { Chat } from '../../../models';
             @for (member of data.chat.participants; track member.id) {
               <div class="member-item">
                 <div class="member-avatar">{{ member.avatar }}</div>
-                <span>{{ member.name }}</span>
+                <div class="member-info">
+                  <span class="member-name">{{ member.name }}</span>
+                  @if (isUserAdmin(member.id)) {
+                    <span class="admin-badge">Admin</span>
+                  }
+                </div>
               </div>
             }
           </div>
@@ -181,6 +190,26 @@ import { Chat } from '../../../models';
       padding: 8px;
     }
 
+    .member-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .member-name {
+      flex: 1;
+    }
+
+    .admin-badge {
+      background: #00a884;
+      color: white;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
     .member-avatar {
       width: 40px;
       height: 40px;
@@ -200,6 +229,7 @@ export class GroupInfoDialogComponent implements OnInit {
   description: string = '';
   isEditingName: boolean = false;
   isEditingDesc: boolean = false;
+  isAdmin: boolean = false;
   private originalName: string = '';
   private originalDescription: string = '';
 
@@ -213,6 +243,7 @@ export class GroupInfoDialogComponent implements OnInit {
     this.description = this.data.chat.groupDescription || '';
     this.originalName = this.groupName;
     this.originalDescription = this.description;
+    this.isAdmin = this.data.chat.role === 'admin';
   }
 
   getGroupInitials(): string {
@@ -232,6 +263,8 @@ export class GroupInfoDialogComponent implements OnInit {
   }
 
   saveChanges(): void {
+    if (!this.isAdmin) return;
+    
     const changes: any = {};
     if (this.groupName !== this.originalName) {
       changes.name = this.groupName;
@@ -240,5 +273,9 @@ export class GroupInfoDialogComponent implements OnInit {
       changes.description = this.description;
     }
     this.dialogRef.close(changes);
+  }
+
+  isUserAdmin(userId: string): boolean {
+    return this.data.chat.admins?.includes(userId) || false;
   }
 }

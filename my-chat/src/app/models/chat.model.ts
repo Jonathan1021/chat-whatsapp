@@ -11,4 +11,6 @@ export interface Chat {
   groupName?: string;
   groupDescription?: string;
   removed?: boolean;
+  role?: 'admin' | 'member';
+  admins?: string[];
 }
