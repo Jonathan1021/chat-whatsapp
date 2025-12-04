@@ -32,8 +32,7 @@ exports.getChats = async (event) => {
     
     // Si es grupo
     if (chat.isGroup) {
-      const membersInfo = await Promise.all((chat.members || []).map(async (memberId) => {
-        if (memberId === userId) return null;
+      const membersInfo = await Promise.all((chat.members || []).filter(memberId => memberId !== userId).map(async (memberId) => {
         const userResult = await docClient.send(new GetCommand({
           TableName: process.env.USERS_TABLE,
           Key: { userId: memberId }
@@ -53,7 +52,7 @@ exports.getChats = async (event) => {
         groupName: chat.groupName,
         groupDescription: chat.groupDescription,
         isGroup: true,
-        participants: membersInfo.filter(m => m !== null),
+        participants: membersInfo,
         lastMessage: null,
         unreadCount: 0,
         isTyping: false,

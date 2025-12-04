@@ -85,7 +85,7 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                     <mat-icon>info</mat-icon>
                     <span>Info del grupo</span>
                   </button>
-                  @if (currentChat.role === 'admin') {
+                  @if (currentChat.role === 'admin' && !currentChat.removed) {
                     <button mat-menu-item (click)="addGroupMembers()">
                       <mat-icon>person_add</mat-icon>
                       <span>Agregar participantes</span>
@@ -105,7 +105,7 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                   <mat-icon>volume_off</mat-icon>
                   <span>Silenciar notificaciones</span>
                 </button>
-                @if (currentChat && currentChat.isGroup) {
+                @if (currentChat && currentChat.isGroup && !currentChat.removed) {
                   <button mat-menu-item (click)="leaveGroup()">
                     <mat-icon>exit_to_app</mat-icon>
                     <span>Salir del grupo</span>

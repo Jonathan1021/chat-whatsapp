@@ -106,6 +106,15 @@ exports.addMembers = async (event) => {
       };
     }
 
+    // Verificar que el usuario no haya sido removido
+    if (groupChat.removed) {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'You are no longer a member of this group' })
+      };
+    }
+
     // Verificar que el usuario sea admin
     if (groupChat.role !== 'admin') {
       return {
@@ -367,6 +376,15 @@ exports.removeMember = async (event) => {
       };
     }
 
+    // Verificar que el usuario no haya sido removido
+    if (groupChat.removed) {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'You are no longer a member of this group' })
+      };
+    }
+
     // Verificar que el usuario sea admin
     if (groupChat.role !== 'admin') {
       return {
@@ -469,6 +487,15 @@ exports.updateInfo = async (event) => {
       };
     }
 
+    // Verificar que el usuario no haya sido removido
+    if (groupChat.removed) {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'You are no longer a member of this group' })
+      };
+    }
+
     if (groupChat.role !== 'admin') {
       return {
         statusCode: 403,
@@ -544,6 +571,15 @@ exports.promoteToAdmin = async (event) => {
         statusCode: 404,
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    // Verificar que el usuario no haya sido removido
+    if (groupChat.removed) {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'You are no longer a member of this group' })
       };
     }
 
@@ -674,6 +710,15 @@ exports.demoteFromAdmin = async (event) => {
         statusCode: 404,
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    // Verificar que el usuario no haya sido removido
+    if (groupChat.removed) {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'You are no longer a member of this group' })
       };
     }
 
