@@ -63,11 +63,14 @@ exports.createGroup = async (event) => {
       body: JSON.stringify({
         id: groupId,
         groupName: name,
+        groupDescription: description,
         isGroup: true,
         participants: [],
         lastMessage: undefined,
         unreadCount: 0,
-        isTyping: false
+        isTyping: false,
+        role: 'admin',
+        admins: [userId]
       })
     };
   } catch (error) {
