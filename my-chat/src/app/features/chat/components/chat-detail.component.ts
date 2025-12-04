@@ -101,15 +101,22 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                     <span>Info del contacto</span>
                   </button>
                 }
-                <button mat-menu-item>
-                  <mat-icon>volume_off</mat-icon>
-                  <span>Silenciar notificaciones</span>
-                </button>
-                @if (currentChat && currentChat.isGroup && !currentChat.removed) {
-                  <button mat-menu-item (click)="leaveGroup()">
-                    <mat-icon>exit_to_app</mat-icon>
-                    <span>Salir del grupo</span>
+                @if (currentChat && currentChat.isGroup && currentChat.removed) {
+                  <button mat-menu-item (click)="deleteChat()">
+                    <mat-icon>delete</mat-icon>
+                    <span>Eliminar chat</span>
                   </button>
+                } @else {
+                  <button mat-menu-item>
+                    <mat-icon>volume_off</mat-icon>
+                    <span>Silenciar notificaciones</span>
+                  </button>
+                  @if (currentChat && currentChat.isGroup) {
+                    <button mat-menu-item (click)="leaveGroup()">
+                      <mat-icon>exit_to_app</mat-icon>
+                      <span>Salir del grupo</span>
+                    </button>
+                  }
                 }
               </mat-menu>
             </div>
@@ -1142,6 +1149,13 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
         },
         error: (err) => console.error('Error leaving group:', err)
       });
+    }
+  }
+
+  deleteChat(): void {
+    if (confirm('¿Estás seguro de que quieres eliminar este chat?')) {
+      const chats = this.chatService.chats$.value.filter(c => c.id !== this.chatId());
+      this.chatService.chats$.next(chats);
     }
   }
 }
