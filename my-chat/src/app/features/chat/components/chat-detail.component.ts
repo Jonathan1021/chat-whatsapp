@@ -1103,13 +1103,7 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result?.reloadMessages) {
-        this.chatService.resetChatMessages(this.chatId());
-        this.chatService.getMessages(this.chatId()).subscribe(() => {
-          const chats = this.chatService.chats$.value;
-          this.currentChat = chats.find(c => c.id === this.chatId()) || null;
-        });
-      } else if (result && Object.keys(result).length > 0 && !result.reload) {
+      if (result && Object.keys(result).length > 0 && !result.reload && !result.reloadMessages) {
         this.chatService.updateGroupInfo(this.chatId(), result.name, result.description).subscribe({
           error: (err) => console.error('Error updating group info:', err)
         });
