@@ -80,12 +80,12 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #menu="matMenu">
-                @if (currentChat && currentChat.isGroup) {
+                @if (currentChat && currentChat.isGroup && !currentChat.removed) {
                   <button mat-menu-item (click)="openGroupInfo()">
                     <mat-icon>info</mat-icon>
                     <span>Info del grupo</span>
                   </button>
-                  @if (currentChat.role === 'admin' && !currentChat.removed) {
+                  @if (currentChat.role === 'admin') {
                     <button mat-menu-item (click)="addGroupMembers()">
                       <mat-icon>person_add</mat-icon>
                       <span>Agregar participantes</span>
@@ -1088,7 +1088,7 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
   }
 
   openGroupInfo(): void {
-    if (!this.currentChat?.isGroup) return;
+    if (!this.currentChat?.isGroup || this.currentChat.removed) return;
 
     const dialogRef = this.dialog.open(GroupInfoDialogComponent, {
       width: '600px',
