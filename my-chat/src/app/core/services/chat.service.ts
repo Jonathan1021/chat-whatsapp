@@ -17,7 +17,7 @@ export class ChatService {
   private currentChatId: string = '';
   private unreadCounts = new Map<string, number>();
 
-  chats$ = this.chatsSubject.asObservable();
+  chats$ = this.chatsSubject;
   messages$ = this.messagesSubject.asObservable();
   private apiUrl = environment.apiUrl;
 
@@ -151,9 +151,6 @@ export class ChatService {
         };
         const currentChats = this.chatsSubject.value;
         this.chatsSubject.next([fullGroup, ...currentChats]);
-        
-        // Cargar mensajes del grupo recién creado
-        this.getMessages(group.id).subscribe();
       })
     );
   }

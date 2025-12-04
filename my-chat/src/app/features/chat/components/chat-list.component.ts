@@ -184,7 +184,9 @@ import { NewGroupDialogComponent } from './new-group-dialog.component';
     .chats-list {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       background: white;
+      max-height: calc(100vh - 120px);
     }
 
     .chats-list::-webkit-scrollbar {

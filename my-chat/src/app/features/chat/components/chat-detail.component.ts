@@ -47,7 +47,7 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                     {{ currentChat.participants[0].avatar }}
                   }
                 </div>
-                @if (!currentChat.isGroup && currentChat.participants[0].online) {
+                @if (!currentChat.isGroup && currentChat.participants[0]?.online) {
                   <span class="online-dot"></span>
                 }
               </div>
@@ -63,9 +63,9 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                 <span class="contact-status">
                   @if (currentChat.isTyping) {
                     <span class="typing-status">escribiendo...</span>
-                  } @else if (currentChat.participants[0].online) {
+                  } @else if (currentChat.participants[0]?.online) {
                     en línea
-                  } @else if (currentChat.participants[0].lastSeen) {
+                  } @else if (currentChat.participants[0]?.lastSeen) {
                     última vez {{ currentChat.participants[0].lastSeen | timeAgo }}
                   }
                 </span>
@@ -878,7 +878,12 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
     effect(() => {
       const id = this.chatId();
       if (id) {
-        this.loadMessages(id);
+        this.currentChat = this.chatService.chats$.value.find(c => c.id === id) || null;
+        this.chatService.setCurrentChat(id);
+        
+        if (!this.chatService.hasLoadedMessages(id)) {
+          this.chatService.getMessages(id).subscribe();
+        }
         this.shouldScrollToBottom = true;
       }
     });
@@ -888,6 +893,13 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
     const user = this.authService.currentUser();
     this.currentUserId = user?.id || '';
     this.messages$ = this.chatService.messages$;
+    
+    // Suscribirse a cambios en chats para actualizar currentChat
+    this.chatService.chats$.subscribe(chats => {
+      if (this.chatId()) {
+        this.currentChat = chats.find(c => c.id === this.chatId()) || null;
+      }
+    });
     
     this.wsService.messages$.subscribe(data => {
       if (data?.type === 'message') {
@@ -928,10 +940,6 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
   }
 
   loadMessages(chatId: string): void {
-    this.chatService.chats$.subscribe(chats => {
-      this.currentChat = chats.find(c => c.id === chatId) || null;
-    });
-    
     this.chatService.setCurrentChat(chatId);
     
     if (!this.chatService.hasLoadedMessages(chatId)) {
@@ -1026,7 +1034,6 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
       if (memberIds && memberIds.length > 0) {
         this.chatService.addGroupMembers(this.chatId(), memberIds).subscribe({
           next: () => {
-            this.chatService.getChats().subscribe();
             this.chatService.getMessages(this.chatId()).subscribe();
           },
           error: (err) => console.error('Error adding members:', err)
@@ -1054,7 +1061,6 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
       if (memberId) {
         this.chatService.removeGroupMember(this.chatId(), memberId).subscribe({
           next: () => {
-            this.chatService.getChats().subscribe();
             this.chatService.getMessages(this.chatId()).subscribe();
           },
           error: (err) => console.error('Error removing member:', err)
@@ -1073,13 +1079,8 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
 
     dialogRef.afterClosed().subscribe(result => {
       if (result?.reload || (result && Object.keys(result).length > 0 && !result.reload)) {
-        if (result.reload) {
-          this.chatService.getChats().subscribe();
-        } else {
+        if (!result.reload) {
           this.chatService.updateGroupInfo(this.chatId(), result.name, result.description).subscribe({
-            next: () => {
-              this.chatService.getChats().subscribe();
-            },
             error: (err) => console.error('Error updating group info:', err)
           });
         }
