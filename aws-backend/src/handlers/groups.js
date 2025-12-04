@@ -504,7 +504,11 @@ exports.updateInfo = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true })
+      body: JSON.stringify({ 
+        success: true,
+        groupName: name !== undefined ? name : groupChat.groupName,
+        groupDescription: description !== undefined ? description : groupChat.groupDescription
+      })
     };
   } catch (error) {
     console.error('Error updating group info:', error);

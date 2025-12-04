@@ -168,7 +168,22 @@ export class ChatService {
   }
 
   updateGroupInfo(groupId: string, name?: string, description?: string): Observable<any> {
-    return this.http.put(`${this.apiUrl}/groups/${groupId}/info`, { name, description });
+    return this.http.put(`${this.apiUrl}/groups/${groupId}/info`, { name, description }).pipe(
+      tap((response: any) => {
+        const chats = this.chatsSubject.value;
+        const updatedChats = chats.map(chat => {
+          if (chat.id === groupId) {
+            return { 
+              ...chat, 
+              groupName: response.groupName,
+              groupDescription: response.groupDescription
+            };
+          }
+          return chat;
+        });
+        this.chatsSubject.next(updatedChats);
+      })
+    );
   }
 
   promoteToAdmin(groupId: string, memberId: string): Observable<any> {
