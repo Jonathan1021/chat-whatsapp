@@ -1022,11 +1022,12 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
   addGroupMembers(): void {
     if (!this.currentChat?.isGroup) return;
 
+    const existingMemberIds = [...this.currentChat.participants?.map(p => p.id) || [], this.currentUserId];
     const dialogRef = this.dialog.open(AddMembersDialogComponent, {
       width: '500px',
       data: {
         groupId: this.chatId(),
-        existingMembers: this.currentChat.participants?.map(p => p.id) || []
+        existingMembers: existingMemberIds
       }
     });
 
