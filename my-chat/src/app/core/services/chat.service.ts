@@ -52,9 +52,7 @@ export class ChatService {
           this.messagesSubject.next(newMessages);
         }
         
-        if (!loadMore) {
-          this.loadedChatMessages.add(chatId);
-        }
+        this.loadedChatMessages.add(chatId);
       })
     );
   }
@@ -153,16 +151,23 @@ export class ChatService {
         };
         const currentChats = this.chatsSubject.value;
         this.chatsSubject.next([fullGroup, ...currentChats]);
+        
+        // Cargar mensajes del grupo recién creado
+        this.getMessages(group.id).subscribe();
       })
     );
   }
 
   addGroupMembers(groupId: string, memberIds: string[]): Observable<any> {
-    return this.http.post(`${this.apiUrl}/groups/${groupId}/members`, { memberIds });
+    return this.http.post(`${this.apiUrl}/groups/${groupId}/members`, { memberIds }).pipe(
+      tap(() => this.resetChatMessages(groupId))
+    );
   }
 
   removeGroupMember(groupId: string, memberId: string): Observable<any> {
-    return this.http.delete(`${this.apiUrl}/groups/${groupId}/members/${memberId}`);
+    return this.http.delete(`${this.apiUrl}/groups/${groupId}/members/${memberId}`).pipe(
+      tap(() => this.resetChatMessages(groupId))
+    );
   }
 
   updateGroupInfo(groupId: string, name?: string, description?: string): Observable<any> {

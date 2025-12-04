@@ -37,7 +37,7 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
       <div class="chat-detail-container">
         <!-- Header (siempre arriba) -->
         <div class="chat-header" style="order: 1;">
-          @if (currentChat && currentChat.participants[0]) {
+          @if (currentChat && (currentChat.isGroup || currentChat.participants[0])) {
             <div class="header-left">
               <div class="avatar-container">
                 <div class="avatar">
@@ -1027,6 +1027,7 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
         this.chatService.addGroupMembers(this.chatId(), memberIds).subscribe({
           next: () => {
             this.chatService.getChats().subscribe();
+            this.chatService.getMessages(this.chatId()).subscribe();
           },
           error: (err) => console.error('Error adding members:', err)
         });
@@ -1054,6 +1055,7 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
         this.chatService.removeGroupMember(this.chatId(), memberId).subscribe({
           next: () => {
             this.chatService.getChats().subscribe();
+            this.chatService.getMessages(this.chatId()).subscribe();
           },
           error: (err) => console.error('Error removing member:', err)
         });
