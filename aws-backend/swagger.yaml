@@ -1,0 +1,575 @@
+openapi: 3.0.0
+info:
+  title: WhatsApp Clone API
+  description: API REST para aplicación de chat en tiempo real con soporte para mensajería individual y grupal
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: https://8du2nts7lf.execute-api.us-east-1.amazonaws.com/dev
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: Endpoints de autenticación y gestión de sesiones
+  - name: Chats
+    description: Gestión de conversaciones
+  - name: Messages
+    description: Gestión de mensajes
+  - name: Groups
+    description: Gestión de grupos
+  - name: Users
+    description: Gestión de usuarios
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar nuevo usuario
+      description: Crea una nueva cuenta de usuario en el sistema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: Password123!
+                name:
+                  type: string
+                  example: John Doe
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    example: 550e8400-e29b-41d4-a716-446655440000
+                  email:
+                    type: string
+                    example: user@example.com
+                  name:
+                    type: string
+                    example: John Doe
+        '400':
+          description: Datos inválidos
+        '500':
+          description: Error del servidor
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Iniciar sesión
+      description: Autentica usuario y retorna tokens JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: Password123!
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refreshToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  idToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Credenciales inválidas
+        '500':
+          description: Error del servidor
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Renovar token de acceso
+      description: Genera un nuevo access token usando el refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token renovado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  idToken:
+                    type: string
+        '401':
+          description: Refresh token inválido
+        '500':
+          description: Error del servidor
+
+  /chats:
+    get:
+      tags:
+        - Chats
+      summary: Obtener lista de chats
+      description: Retorna todos los chats del usuario autenticado (individuales y grupales)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de chats obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Chat'
+        '401':
+          description: No autorizado
+        '500':
+          description: Error del servidor
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Obtener lista de usuarios
+      description: Retorna todos los usuarios disponibles para iniciar chat
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de usuarios obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserBasic'
+        '401':
+          description: No autorizado
+        '500':
+          description: Error del servidor
+
+  /chats/{chatId}/messages:
+    get:
+      tags:
+        - Messages
+      summary: Obtener mensajes de un chat
+      description: Retorna mensajes de un chat con paginación (100 mensajes por página)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: chat_uuid1_uuid2
+        - name: lastKey
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Clave de paginación (base64 encoded)
+      responses:
+        '200':
+          description: Mensajes obtenidos exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  lastKey:
+                    type: string
+                    nullable: true
+                    description: Clave para siguiente página (null si no hay más)
+        '401':
+          description: No autorizado
+        '404':
+          description: Chat no encontrado
+        '500':
+          description: Error del servidor
+
+  /groups:
+    post:
+      tags:
+        - Groups
+      summary: Crear grupo
+      description: Crea un nuevo grupo de chat con miembros seleccionados
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - memberIds
+              properties:
+                name:
+                  type: string
+                  maxLength: 50
+                  example: Family Group
+                description:
+                  type: string
+                  maxLength: 200
+                  example: Our family chat
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                  example: ["uuid1", "uuid2", "uuid3"]
+      responses:
+        '201':
+          description: Grupo creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autorizado
+        '500':
+          description: Error del servidor
+
+  /groups/{groupId}/members:
+    post:
+      tags:
+        - Groups
+      summary: Agregar miembros al grupo
+      description: Agrega nuevos miembros a un grupo existente
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: group_1234567890_abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - memberIds
+              properties:
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                  example: ["uuid4", "uuid5"]
+      responses:
+        '200':
+          description: Miembros agregados exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  members:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autorizado
+        '404':
+          description: Grupo no encontrado
+        '500':
+          description: Error del servidor
+
+  /groups/{groupId}/members/{memberId}:
+    delete:
+      tags:
+        - Groups
+      summary: Eliminar miembro del grupo
+      description: Elimina un miembro del grupo. El usuario eliminado puede ver historial pero no enviar mensajes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: group_1234567890_abc123
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: uuid3
+      responses:
+        '200':
+          description: Miembro eliminado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  members:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: No autorizado
+        '404':
+          description: Grupo no encontrado
+        '500':
+          description: Error del servidor
+
+  /groups/{groupId}/info:
+    put:
+      tags:
+        - Groups
+      summary: Actualizar información del grupo
+      description: Actualiza nombre y/o descripción del grupo
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: group_1234567890_abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 50
+                  example: New Group Name
+                description:
+                  type: string
+                  maxLength: 200
+                  example: Updated description
+      responses:
+        '200':
+          description: Información actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autorizado
+        '404':
+          description: Grupo no encontrado
+        '500':
+          description: Error del servidor
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        avatar:
+          type: string
+          example: JD
+        online:
+          type: boolean
+          example: false
+        lastSeen:
+          type: string
+          format: date-time
+          nullable: true
+
+    UserBasic:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+
+    Chat:
+      type: object
+      properties:
+        id:
+          type: string
+          example: chat_uuid1_uuid2
+        chatId:
+          type: string
+          example: chat_uuid1_uuid2
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        lastMessage:
+          $ref: '#/components/schemas/Message'
+          nullable: true
+        unreadCount:
+          type: integer
+          example: 0
+        isTyping:
+          type: boolean
+          example: false
+        isGroup:
+          type: boolean
+          example: false
+        groupName:
+          type: string
+          nullable: true
+          example: Family Group
+        groupDescription:
+          type: string
+          nullable: true
+          example: Our family chat
+        removed:
+          type: boolean
+          example: false
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          example: msg_1234567890_abc123
+        messageId:
+          type: string
+          example: msg_1234567890_abc123
+        chatId:
+          type: string
+          example: chat_uuid1_uuid2
+        senderId:
+          type: string
+          example: uuid1
+        senderName:
+          type: string
+          example: John Doe
+        senderAvatar:
+          type: string
+          example: JD
+        content:
+          type: string
+          example: Hello, how are you?
+        timestamp:
+          type: integer
+          format: int64
+          example: 1234567890000
+        status:
+          type: string
+          enum: [sent, delivered, read]
+          example: sent
+        type:
+          type: string
+          enum: [text, system]
+          example: text
+        systemAction:
+          type: string
+          enum: [group_created, member_added, member_removed]
+          nullable: true
+        affectedUserId:
+          type: string
+          nullable: true
+        affectedUserName:
+          type: string
+          nullable: true
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Error message description

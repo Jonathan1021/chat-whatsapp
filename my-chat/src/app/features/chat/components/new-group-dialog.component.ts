@@ -51,6 +51,15 @@ interface User {
               <mat-label>Nombre del grupo</mat-label>
               <input matInput [(ngModel)]="groupName" placeholder="Ej: Familia, Trabajo...">
             </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Descripción (opcional)</mat-label>
+              <textarea matInput [(ngModel)]="groupDescription" 
+                        placeholder="Agrega una descripción del grupo"
+                        rows="2"
+                        maxlength="200"></textarea>
+              <mat-hint align="end">{{ groupDescription.length }}/200</mat-hint>
+            </mat-form-field>
           </div>
 
           <div class="members-section">
@@ -219,6 +228,7 @@ export class NewGroupDialogComponent implements OnInit {
   users: User[] = [];
   loading = true;
   groupName = '';
+  groupDescription = '';
 
   constructor(
     private dialogRef: MatDialogRef<NewGroupDialogComponent>,
@@ -250,7 +260,11 @@ export class NewGroupDialogComponent implements OnInit {
     if (!this.canCreate()) return;
 
     const selectedUserIds = this.users.filter(u => u.selected).map(u => u.userId);
-    this.dialogRef.close({ name: this.groupName, memberIds: selectedUserIds });
+    this.dialogRef.close({ 
+      name: this.groupName, 
+      memberIds: selectedUserIds,
+      description: this.groupDescription.trim() || undefined
+    });
   }
 
   close(): void {

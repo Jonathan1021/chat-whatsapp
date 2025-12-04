@@ -141,8 +141,8 @@ export class ChatService {
     this.messageLastKeys.delete(chatId);
   }
 
-  createGroup(name: string, memberIds: string[]): Observable<Chat> {
-    return this.http.post<Chat>(`${this.apiUrl}/groups`, { name, memberIds }).pipe(
+  createGroup(name: string, memberIds: string[], description?: string): Observable<Chat> {
+    return this.http.post<Chat>(`${this.apiUrl}/groups`, { name, memberIds, description }).pipe(
       tap(group => {
         const currentChats = this.chatsSubject.value;
         this.chatsSubject.next([group, ...currentChats]);
@@ -156,6 +156,10 @@ export class ChatService {
 
   removeGroupMember(groupId: string, memberId: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/groups/${groupId}/members/${memberId}`);
+  }
+
+  updateGroupInfo(groupId: string, name?: string, description?: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/groups/${groupId}/info`, { name, description });
   }
 
   isUserRemovedFromGroup(chatId: string): boolean {

@@ -7,7 +7,7 @@ const docClient = DynamoDBDocumentClient.from(client);
 exports.createGroup = async (event) => {
   try {
     const userId = event.requestContext.authorizer.claims.sub;
-    const { name, memberIds } = JSON.parse(event.body);
+    const { name, memberIds, description } = JSON.parse(event.body);
 
     const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const allMembers = [userId, ...memberIds];
@@ -21,6 +21,7 @@ exports.createGroup = async (event) => {
           userId: memberId,
           groupId: groupId,
           groupName: name,
+          groupDescription: description,
           isGroup: true,
           members: allMembers,
           lastMessageTime: now,
@@ -267,6 +268,73 @@ exports.removeMember = async (event) => {
     };
   } catch (error) {
     console.error('Error removing member:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
+
+exports.updateInfo = async (event) => {
+  try {
+    const userId = event.requestContext.authorizer.claims.sub;
+    const { groupId } = event.pathParameters;
+    const { name, description } = JSON.parse(event.body);
+
+    const groupResult = await docClient.send(new QueryCommand({
+      TableName: process.env.CHATS_TABLE,
+      IndexName: 'UserChatsIndex',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId }
+    }));
+
+    const groupChat = groupResult.Items?.find(c => c.groupId === groupId);
+    if (!groupChat) {
+      return {
+        statusCode: 404,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    const members = groupChat.members || [];
+    const updates = [];
+    const values = {};
+
+    if (name !== undefined) {
+      updates.push('groupName = :name');
+      values[':name'] = name;
+    }
+    if (description !== undefined) {
+      updates.push('groupDescription = :desc');
+      values[':desc'] = description;
+    }
+
+    if (updates.length === 0) {
+      return {
+        statusCode: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'No fields to update' })
+      };
+    }
+
+    await Promise.all(members.map(memberId =>
+      docClient.send(new UpdateCommand({
+        TableName: process.env.CHATS_TABLE,
+        Key: { chatId: `${groupId}#${memberId}` },
+        UpdateExpression: `SET ${updates.join(', ')}`,
+        ExpressionAttributeValues: values
+      }))
+    ));
+
+    return {
+      statusCode: 200,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ success: true })
+    };
+  } catch (error) {
+    console.error('Error updating group info:', error);
     return {
       statusCode: 500,
       headers: { 'Access-Control-Allow-Origin': '*' },

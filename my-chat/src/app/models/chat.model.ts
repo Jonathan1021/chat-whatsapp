@@ -9,5 +9,6 @@ export interface Chat {
   isTyping: boolean;
   isGroup?: boolean;
   groupName?: string;
+  groupDescription?: string;
   removed?: boolean;
 }

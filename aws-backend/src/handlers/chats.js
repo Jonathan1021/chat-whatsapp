@@ -51,6 +51,7 @@ exports.getChats = async (event) => {
         id: simpleChatId,
         chatId: simpleChatId,
         groupName: chat.groupName,
+        groupDescription: chat.groupDescription,
         isGroup: true,
         participants: membersInfo.filter(m => m !== null),
         lastMessage: null,

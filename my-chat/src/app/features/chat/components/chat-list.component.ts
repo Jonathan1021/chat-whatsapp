@@ -491,7 +491,7 @@ export class ChatListComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.chatService.createGroup(result.name, result.memberIds).subscribe({
+        this.chatService.createGroup(result.name, result.memberIds, result.description).subscribe({
           next: (group) => {
             this.selectedChatId = group.id;
             this.chatSelected.emit(group.id);

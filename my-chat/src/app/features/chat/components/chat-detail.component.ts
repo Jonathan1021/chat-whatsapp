@@ -16,6 +16,7 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
 import { MatDialog } from '@angular/material/dialog';
 import { AddMembersDialogComponent } from './add-members-dialog.component';
 import { RemoveMemberDialogComponent } from './remove-member-dialog.component';
+import { GroupInfoDialogComponent } from './group-info-dialog.component';
 
 @Component({
   selector: 'app-chat-detail',
@@ -79,11 +80,11 @@ import { RemoveMemberDialogComponent } from './remove-member-dialog.component';
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #menu="matMenu">
-                <button mat-menu-item>
-                  <mat-icon>info</mat-icon>
-                  <span>Info del contacto</span>
-                </button>
                 @if (currentChat && currentChat.isGroup) {
+                  <button mat-menu-item (click)="openGroupInfo()">
+                    <mat-icon>info</mat-icon>
+                    <span>Info del grupo</span>
+                  </button>
                   <button mat-menu-item (click)="addGroupMembers()">
                     <mat-icon>person_add</mat-icon>
                     <span>Agregar participantes</span>
@@ -91,6 +92,11 @@ import { RemoveMemberDialogComponent } from './remove-member-dialog.component';
                   <button mat-menu-item (click)="removeGroupMember()">
                     <mat-icon>person_remove</mat-icon>
                     <span>Eliminar participante</span>
+                  </button>
+                } @else {
+                  <button mat-menu-item>
+                    <mat-icon>info</mat-icon>
+                    <span>Info del contacto</span>
                   </button>
                 }
                 <button mat-menu-item>
@@ -1046,6 +1052,26 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
             this.chatService.getChats().subscribe();
           },
           error: (err) => console.error('Error removing member:', err)
+        });
+      }
+    });
+  }
+
+  openGroupInfo(): void {
+    if (!this.currentChat?.isGroup) return;
+
+    const dialogRef = this.dialog.open(GroupInfoDialogComponent, {
+      width: '600px',
+      data: { chat: this.currentChat }
+    });
+
+    dialogRef.afterClosed().subscribe(changes => {
+      if (changes && Object.keys(changes).length > 0) {
+        this.chatService.updateGroupInfo(this.chatId(), changes.name, changes.description).subscribe({
+          next: () => {
+            this.chatService.getChats().subscribe();
+          },
+          error: (err) => console.error('Error updating group info:', err)
         });
       }
     });
