@@ -239,6 +239,61 @@ exports.leaveGroup = async (event) => {
       };
     }
 
+    // Obtener info del usuario que sale ANTES de eliminarlo
+    const userInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const userName = userInfo.Item?.name || 'Usuario';
+
+    // Crear mensaje de sistema ANTES de eliminar al usuario
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = Date.now();
+    const systemMessage = {
+      messageId,
+      chatId: groupId,
+      senderId: userId,
+      senderName: userName,
+      content: `${userName} salió del grupo`,
+      timestamp,
+      type: 'system',
+      systemAction: 'member_left',
+      createdAt: new Date().toISOString()
+    };
+    
+    await docClient.send(new PutCommand({
+      TableName: process.env.MESSAGES_TABLE,
+      Item: systemMessage
+    }));
+
+    // Enviar mensaje via WebSocket a TODOS los miembros (incluyendo el que sale)
+    const { ApiGatewayManagementApiClient, PostToConnectionCommand } = require('@aws-sdk/client-apigatewaymanagementapi');
+    const domain = event.requestContext.domainName;
+    const stage = event.requestContext.stage;
+    const apiGateway = new ApiGatewayManagementApiClient({ endpoint: `https://${domain}/${stage}` });
+
+    const allConnections = await Promise.all(
+      members.map(memberId => 
+        docClient.send(new QueryCommand({
+          TableName: process.env.CONNECTIONS_TABLE,
+          IndexName: 'UserConnectionsIndex',
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': memberId }
+        }))
+      )
+    );
+
+    const messageWithId = { ...systemMessage, id: messageId };
+    for (const result of allConnections) {
+      for (const connection of result.Items || []) {
+        await apiGateway.send(new PostToConnectionCommand({
+          ConnectionId: connection.connectionId,
+          Data: JSON.stringify({ type: 'message', data: messageWithId })
+        })).catch(() => {});
+      }
+    }
+
     const updatedMembers = members.filter(id => id !== userId);
     let updatedAdmins = admins;
 
@@ -269,61 +324,6 @@ exports.leaveGroup = async (event) => {
       TableName: process.env.CHATS_TABLE,
       Key: { chatId: `${groupId}#${userId}` }
     }));
-
-    // Obtener info del usuario que sale
-    const userInfo = await docClient.send(new GetCommand({
-      TableName: process.env.USERS_TABLE,
-      Key: { userId }
-    }));
-
-    const userName = userInfo.Item?.name || 'Usuario';
-
-    // Crear mensaje de sistema
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const timestamp = Date.now();
-    const systemMessage = {
-      messageId,
-      chatId: groupId,
-      senderId: userId,
-      senderName: userName,
-      content: `${userName} salió del grupo`,
-      timestamp,
-      type: 'system',
-      systemAction: 'member_left',
-      createdAt: new Date().toISOString()
-    };
-    
-    await docClient.send(new PutCommand({
-      TableName: process.env.MESSAGES_TABLE,
-      Item: systemMessage
-    }));
-
-    // Enviar mensaje via WebSocket
-    const { ApiGatewayManagementApiClient, PostToConnectionCommand } = require('@aws-sdk/client-apigatewaymanagementapi');
-    const domain = event.requestContext.domainName;
-    const stage = event.requestContext.stage;
-    const apiGateway = new ApiGatewayManagementApiClient({ endpoint: `https://${domain}/${stage}` });
-
-    const allConnections = await Promise.all(
-      updatedMembers.map(userId => 
-        docClient.send(new QueryCommand({
-          TableName: process.env.CONNECTIONS_TABLE,
-          IndexName: 'UserConnectionsIndex',
-          KeyConditionExpression: 'userId = :userId',
-          ExpressionAttributeValues: { ':userId': userId }
-        }))
-      )
-    );
-
-    const messageWithId = { ...systemMessage, id: messageId };
-    for (const result of allConnections) {
-      for (const connection of result.Items || []) {
-        await apiGateway.send(new PostToConnectionCommand({
-          ConnectionId: connection.connectionId,
-          Data: JSON.stringify({ type: 'message', data: messageWithId })
-        })).catch(() => {});
-      }
-    }
 
     return {
       statusCode: 200,
