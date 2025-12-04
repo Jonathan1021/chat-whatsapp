@@ -144,8 +144,15 @@ export class ChatService {
   createGroup(name: string, memberIds: string[], description?: string): Observable<Chat> {
     return this.http.post<Chat>(`${this.apiUrl}/groups`, { name, memberIds, description }).pipe(
       tap(group => {
+        const fullGroup: Chat = {
+          ...group,
+          participants: [],
+          lastMessage: undefined,
+          unreadCount: 0,
+          isTyping: false
+        };
         const currentChats = this.chatsSubject.value;
-        this.chatsSubject.next([group, ...currentChats]);
+        this.chatsSubject.next([fullGroup, ...currentChats]);
       })
     );
   }
