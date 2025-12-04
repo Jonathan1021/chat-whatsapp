@@ -47,7 +47,7 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                     {{ currentChat.participants[0].avatar }}
                   }
                 </div>
-                @if (!currentChat.isGroup && currentChat.participants[0]?.online) {
+                @if (!currentChat.isGroup && currentChat.participants.length > 0 && currentChat.participants[0].online) {
                   <span class="online-dot"></span>
                 }
               </div>
@@ -63,9 +63,9 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                 <span class="contact-status">
                   @if (currentChat.isTyping) {
                     <span class="typing-status">escribiendo...</span>
-                  } @else if (currentChat.participants[0]?.online) {
+                  } @else if (currentChat.participants.length > 0 && currentChat.participants[0].online) {
                     en línea
-                  } @else if (currentChat.participants[0]?.lastSeen) {
+                  } @else if (currentChat.participants.length > 0 && currentChat.participants[0].lastSeen) {
                     última vez {{ currentChat.participants[0].lastSeen | timeAgo }}
                   }
                 </span>
@@ -1034,6 +1034,18 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
       if (memberIds && memberIds.length > 0) {
         this.chatService.addGroupMembers(this.chatId(), memberIds).subscribe({
           next: () => {
+            this.chatService.getUsers().subscribe(users => {
+              if (this.currentChat) {
+                const newMembers = users.filter(u => memberIds.includes(u.userId)).map(u => ({
+                  id: u.userId,
+                  name: u.name,
+                  email: u.email,
+                  avatar: u.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2),
+                  online: false
+                }));
+                this.currentChat.participants = [...this.currentChat.participants, ...newMembers];
+              }
+            });
             this.chatService.getMessages(this.chatId()).subscribe();
           },
           error: (err) => console.error('Error adding members:', err)
