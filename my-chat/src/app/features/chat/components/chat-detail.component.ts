@@ -1136,6 +1136,10 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
 
     if (confirm('¿Estás seguro de que quieres salir del grupo?')) {
       this.chatService.leaveGroup(this.chatId()).subscribe({
+        next: () => {
+          this.chatService.resetChatMessages(this.chatId());
+          this.chatService.getMessages(this.chatId()).subscribe();
+        },
         error: (err) => console.error('Error leaving group:', err)
       });
     }
