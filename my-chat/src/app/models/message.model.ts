@@ -1,6 +1,6 @@
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 export type MessageType = 'text' | 'system';
-export type SystemMessageAction = 'member_added' | 'member_removed' | 'group_created';
+export type SystemMessageAction = 'member_added' | 'member_removed' | 'group_created' | 'admin_promoted' | 'admin_demoted';
 
 export interface Message {
   id: string;

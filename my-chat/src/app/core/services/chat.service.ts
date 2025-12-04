@@ -166,6 +166,10 @@ export class ChatService {
     return this.http.post(`${this.apiUrl}/groups/${groupId}/admins/${memberId}`, {});
   }
 
+  demoteFromAdmin(groupId: string, memberId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/groups/${groupId}/admins/${memberId}`);
+  }
+
   isUserRemovedFromGroup(chatId: string): boolean {
     const chat = this.chatsSubject.value.find(c => c.id === chatId);
     return chat?.removed || false;

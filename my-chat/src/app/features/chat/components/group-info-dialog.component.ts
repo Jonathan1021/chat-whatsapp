@@ -73,6 +73,11 @@ import { ChatService } from '../../../core/services/chat.service';
                   <span class="member-name">{{ member.name }}</span>
                   @if (isUserAdmin(member.id)) {
                     <span class="admin-badge">Admin</span>
+                    @if (isAdmin) {
+                      <button mat-icon-button class="demote-btn" (click)="demoteFromAdmin(member.id)" matTooltip="Quitar administrador">
+                        <mat-icon>remove_moderator</mat-icon>
+                      </button>
+                    }
                   } @else if (isAdmin) {
                     <button mat-icon-button class="promote-btn" (click)="promoteToAdmin(member.id)" matTooltip="Hacer administrador">
                       <mat-icon>admin_panel_settings</mat-icon>
@@ -228,6 +233,18 @@ import { ChatService } from '../../../core/services/chat.service';
       height: 20px;
     }
 
+    .demote-btn {
+      width: 32px;
+      height: 32px;
+      color: #d32f2f;
+    }
+
+    .demote-btn mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
     .member-avatar {
       width: 40px;
       height: 40px;
@@ -306,6 +323,17 @@ export class GroupInfoDialogComponent implements OnInit {
         this.dialogRef.close({ reload: true });
       },
       error: (err) => console.error('Error promoting to admin:', err)
+    });
+  }
+
+  demoteFromAdmin(memberId: string): void {
+    if (!this.isAdmin) return;
+    
+    this.chatService.demoteFromAdmin(this.data.chat.id, memberId).subscribe({
+      next: () => {
+        this.dialogRef.close({ reload: true });
+      },
+      error: (err) => console.error('Error demoting from admin:', err)
     });
   }
 }

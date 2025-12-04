@@ -156,6 +156,22 @@ functions:
             type: COGNITO_USER_POOLS
             authorizerId: !Ref ApiGatewayAuthorizer
 
+  demoteFromAdmin:
+    handler: src/handlers/groups.demoteFromAdmin
+    events:
+      - http:
+          path: groups/{groupId}/admins/{memberId}
+          method: delete
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+            allowCredentials: false
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
   # Messages
   getMessages:
     handler: src/handlers/messages.getMessages

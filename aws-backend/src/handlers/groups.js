@@ -428,6 +428,67 @@ exports.promoteToAdmin = async (event) => {
       }))
     ));
 
+    const promoterInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const promotedInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId: memberId }
+    }));
+
+    const promoterName = promoterInfo.Item?.name || 'Usuario';
+    const promotedName = promotedInfo.Item?.name || 'Usuario';
+
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = Date.now();
+    const systemMessage = {
+      messageId,
+      chatId: groupId,
+      senderId: userId,
+      senderName: promoterName,
+      content: `${promoterName} nombró a ${promotedName} administrador`,
+      timestamp,
+      type: 'system',
+      systemAction: 'admin_promoted',
+      affectedUserId: memberId,
+      affectedUserName: promotedName,
+      createdAt: new Date().toISOString()
+    };
+    
+    await docClient.send(new PutCommand({
+      TableName: process.env.MESSAGES_TABLE,
+      Item: systemMessage
+    }));
+
+    // Enviar mensaje via WebSocket
+    const { ApiGatewayManagementApiClient, PostToConnectionCommand } = require('@aws-sdk/client-apigatewaymanagementapi');
+    const domain = event.requestContext.domainName;
+    const stage = event.requestContext.stage;
+    const apiGateway = new ApiGatewayManagementApiClient({ endpoint: `https://${domain}/${stage}` });
+
+    const allConnections = await Promise.all(
+      members.map(userId => 
+        docClient.send(new QueryCommand({
+          TableName: process.env.CONNECTIONS_TABLE,
+          IndexName: 'UserConnectionsIndex',
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': userId }
+        }))
+      )
+    );
+
+    const messageWithId = { ...systemMessage, id: messageId };
+    for (const result of allConnections) {
+      for (const connection of result.Items || []) {
+        await apiGateway.send(new PostToConnectionCommand({
+          ConnectionId: connection.connectionId,
+          Data: JSON.stringify({ type: 'message', data: messageWithId })
+        })).catch(() => {});
+      }
+    }
+
     return {
       statusCode: 200,
       headers: { 'Access-Control-Allow-Origin': '*' },
@@ -435,6 +496,136 @@ exports.promoteToAdmin = async (event) => {
     };
   } catch (error) {
     console.error('Error promoting to admin:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
+
+exports.demoteFromAdmin = async (event) => {
+  try {
+    const userId = event.requestContext.authorizer.claims.sub;
+    const { groupId, memberId } = event.pathParameters;
+
+    const groupResult = await docClient.send(new QueryCommand({
+      TableName: process.env.CHATS_TABLE,
+      IndexName: 'UserChatsIndex',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId }
+    }));
+
+    const groupChat = groupResult.Items?.find(c => c.groupId === groupId);
+    if (!groupChat) {
+      return {
+        statusCode: 404,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    if (groupChat.role !== 'admin') {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Only admins can demote admins' })
+      };
+    }
+
+    const admins = groupChat.admins || [];
+    if (!admins.includes(memberId)) {
+      return {
+        statusCode: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'User is not an admin' })
+      };
+    }
+
+    const updatedAdmins = admins.filter(id => id !== memberId);
+    const members = groupChat.members || [];
+
+    await Promise.all(members.map(member =>
+      docClient.send(new UpdateCommand({
+        TableName: process.env.CHATS_TABLE,
+        Key: { chatId: `${groupId}#${member}` },
+        UpdateExpression: 'SET admins = :admins, #role = :role',
+        ExpressionAttributeNames: { '#role': 'role' },
+        ExpressionAttributeValues: {
+          ':admins': updatedAdmins,
+          ':role': updatedAdmins.includes(member) ? 'admin' : 'member'
+        }
+      }))
+    ));
+
+    const demoterInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const demotedInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId: memberId }
+    }));
+
+    const demoterName = demoterInfo.Item?.name || 'Usuario';
+    const demotedName = demotedInfo.Item?.name || 'Usuario';
+
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = Date.now();
+    const systemMessage = {
+      messageId,
+      chatId: groupId,
+      senderId: userId,
+      senderName: demoterName,
+      content: `${demoterName} quitó a ${demotedName} como administrador`,
+      timestamp,
+      type: 'system',
+      systemAction: 'admin_demoted',
+      affectedUserId: memberId,
+      affectedUserName: demotedName,
+      createdAt: new Date().toISOString()
+    };
+    
+    await docClient.send(new PutCommand({
+      TableName: process.env.MESSAGES_TABLE,
+      Item: systemMessage
+    }));
+
+    // Enviar mensaje via WebSocket
+    const { ApiGatewayManagementApiClient, PostToConnectionCommand } = require('@aws-sdk/client-apigatewaymanagementapi');
+    const domain = event.requestContext.domainName;
+    const stage = event.requestContext.stage;
+    const apiGateway = new ApiGatewayManagementApiClient({ endpoint: `https://${domain}/${stage}` });
+
+    const allConnections = await Promise.all(
+      members.map(userId => 
+        docClient.send(new QueryCommand({
+          TableName: process.env.CONNECTIONS_TABLE,
+          IndexName: 'UserConnectionsIndex',
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': userId }
+        }))
+      )
+    );
+
+    const messageWithId = { ...systemMessage, id: messageId };
+    for (const result of allConnections) {
+      for (const connection of result.Items || []) {
+        await apiGateway.send(new PostToConnectionCommand({
+          ConnectionId: connection.connectionId,
+          Data: JSON.stringify({ type: 'message', data: messageWithId })
+        })).catch(() => {});
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ success: true, admins: updatedAdmins })
+    };
+  } catch (error) {
+    console.error('Error demoting from admin:', error);
     return {
       statusCode: 500,
       headers: { 'Access-Control-Allow-Origin': '*' },

@@ -893,23 +893,25 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
       if (data?.type === 'message') {
         const messageData = data.data;
         
-        if (messageData.senderId !== this.currentUserId) {
-          const tempMessage: Message = {
-            id: messageData.messageId || `msg_${Date.now()}`,
-            chatId: messageData.chatId,
-            senderId: messageData.senderId,
-            content: messageData.content,
-            timestamp: messageData.timestamp,
-            status: 'sent',
-            senderName: messageData.senderName,
-            senderAvatar: messageData.senderAvatar
-          };
-          
-          this.chatService.addMessageLocally(tempMessage);
-          
-          if (messageData.chatId === this.chatId()) {
-            this.shouldScrollToBottom = true;
-          }
+        const tempMessage: Message = {
+          id: messageData.messageId || messageData.id || `msg_${Date.now()}`,
+          chatId: messageData.chatId,
+          senderId: messageData.senderId,
+          content: messageData.content,
+          timestamp: messageData.timestamp,
+          status: 'sent',
+          senderName: messageData.senderName,
+          senderAvatar: messageData.senderAvatar,
+          type: messageData.type,
+          systemAction: messageData.systemAction,
+          affectedUserId: messageData.affectedUserId,
+          affectedUserName: messageData.affectedUserName
+        };
+        
+        this.chatService.addMessageLocally(tempMessage);
+        
+        if (messageData.chatId === this.chatId()) {
+          this.shouldScrollToBottom = true;
         }
       }
     });
@@ -1093,6 +1095,10 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
         return `${message.senderName} agregó a ${message.affectedUserName}`;
       case 'member_removed':
         return `${message.senderName} eliminó a ${message.affectedUserName}`;
+      case 'admin_promoted':
+        return `${message.senderName} nombró a ${message.affectedUserName} administrador`;
+      case 'admin_demoted':
+        return `${message.senderName} quitó a ${message.affectedUserName} como administrador`;
       default:
         return '';
     }
