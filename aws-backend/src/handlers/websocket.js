@@ -70,6 +70,19 @@ exports.message = async (event) => {
       const groupChat = groupResult.Items?.find(c => c.groupId === chatId);
       participants = groupChat?.members || [];
       
+      // Filtrar miembros eliminados
+      const activeParticipants = [];
+      for (const memberId of participants) {
+        const memberChat = await docClient.send(new GetCommand({
+          TableName: process.env.CHATS_TABLE,
+          Key: { chatId: `${chatId}#${memberId}` }
+        }));
+        if (!memberChat.Item?.removed) {
+          activeParticipants.push(memberId);
+        }
+      }
+      participants = activeParticipants;
+      
       console.log(`📨 Mensaje grupal en ${chatId}`);
     } else {
       // Chat individual

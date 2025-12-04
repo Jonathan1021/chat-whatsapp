@@ -55,7 +55,8 @@ exports.getChats = async (event) => {
         participants: membersInfo.filter(m => m !== null),
         lastMessage: null,
         unreadCount: 0,
-        isTyping: false
+        isTyping: false,
+        removed: chat.removed || false
       };
     }
     

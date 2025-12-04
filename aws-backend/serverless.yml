@@ -112,6 +112,28 @@ functions:
             type: COGNITO_USER_POOLS
             authorizerId: !Ref ApiGatewayAuthorizer
 
+  addGroupMembers:
+    handler: src/handlers/groups.addMembers
+    events:
+      - http:
+          path: groups/{groupId}/members
+          method: post
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
+  removeGroupMember:
+    handler: src/handlers/groups.removeMember
+    events:
+      - http:
+          path: groups/{groupId}/members/{memberId}
+          method: delete
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
   # Messages
   getMessages:
     handler: src/handlers/messages.getMessages

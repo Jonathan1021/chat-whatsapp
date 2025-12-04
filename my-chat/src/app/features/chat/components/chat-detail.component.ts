@@ -13,6 +13,9 @@ import { ChatService } from '../../../core/services/chat.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { WebSocketService } from '../../../core/services/websocket.service';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
+import { MatDialog } from '@angular/material/dialog';
+import { AddMembersDialogComponent } from './add-members-dialog.component';
+import { RemoveMemberDialogComponent } from './remove-member-dialog.component';
 
 @Component({
   selector: 'app-chat-detail',
@@ -80,6 +83,16 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
                   <mat-icon>info</mat-icon>
                   <span>Info del contacto</span>
                 </button>
+                @if (currentChat && currentChat.isGroup) {
+                  <button mat-menu-item (click)="addGroupMembers()">
+                    <mat-icon>person_add</mat-icon>
+                    <span>Agregar participantes</span>
+                  </button>
+                  <button mat-menu-item (click)="removeGroupMember()">
+                    <mat-icon>person_remove</mat-icon>
+                    <span>Eliminar participante</span>
+                  </button>
+                }
                 <button mat-menu-item>
                   <mat-icon>volume_off</mat-icon>
                   <span>Silenciar notificaciones</span>
@@ -98,13 +111,13 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
           <div class="messages-wrapper">
             @for (message of messages$ | async; track message.id) {
               <div class="message-row" [class.own]="message.senderId === currentUserId">
-                @if (currentChat?.isGroup && message.senderId !== currentUserId) {
+                @if (currentChat && currentChat.isGroup && message.senderId !== currentUserId) {
                   <div class="sender-info">
                     <div class="sender-avatar">{{ message.senderAvatar }}</div>
                   </div>
                 }
-                <div class="message-bubble" [class.outgoing]="message.senderId === currentUserId" [class.group-message]="currentChat?.isGroup && message.senderId !== currentUserId">
-                  @if (currentChat?.isGroup && message.senderId !== currentUserId) {
+                <div class="message-bubble" [class.outgoing]="message.senderId === currentUserId" [class.group-message]="currentChat && currentChat.isGroup && message.senderId !== currentUserId">
+                  @if (currentChat && currentChat.isGroup && message.senderId !== currentUserId) {
                     <div class="sender-name">{{ message.senderName }}</div>
                   }
                   <div class="message-content">
@@ -133,7 +146,7 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
               </div>
             }
             
-            @if (currentChat?.isTyping) {
+            @if (currentChat && currentChat.isTyping) {
               <div class="message-row">
                 <div class="message-bubble typing-bubble">
                   <div class="typing-animation">
@@ -173,35 +186,44 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
         }
 
         <!-- Input Area (siempre abajo) -->
-        <div class="input-area" style="order: 3; position: sticky; bottom: 0; z-index: 10;">
-          <button mat-icon-button class="action-button" aria-label="Emoji" (click)="toggleEmojiPicker()">
-            <mat-icon>sentiment_satisfied_alt</mat-icon>
-          </button>
-          
-          <button mat-icon-button class="action-button" aria-label="Adjuntar">
-            <mat-icon>attach_file</mat-icon>
-          </button>
-
-          <div class="input-wrapper">
-            <input 
-              type="text"
-              class="message-input"
-              placeholder="Escribe un mensaje aquí"
-              [(ngModel)]="newMessage"
-              (keyup.enter)="sendMessage()"
-              aria-label="Escribe un mensaje">
+        @if (currentChat && currentChat.removed) {
+          <div class="input-area-blocked" style="order: 3; position: sticky; bottom: 0; z-index: 10;">
+            <div class="blocked-message">
+              <mat-icon>block</mat-icon>
+              <span>Ya no eres miembro de este grupo</span>
+            </div>
           </div>
+        } @else {
+          <div class="input-area" style="order: 3; position: sticky; bottom: 0; z-index: 10;">
+            <button mat-icon-button class="action-button" aria-label="Emoji" (click)="toggleEmojiPicker()">
+              <mat-icon>sentiment_satisfied_alt</mat-icon>
+            </button>
+            
+            <button mat-icon-button class="action-button" aria-label="Adjuntar">
+              <mat-icon>attach_file</mat-icon>
+            </button>
 
-          @if (newMessage.trim()) {
-            <button mat-icon-button class="send-button" (click)="sendMessage()" aria-label="Enviar">
-              <mat-icon>send</mat-icon>
-            </button>
-          } @else {
-            <button mat-icon-button class="action-button" aria-label="Mensaje de voz">
-              <mat-icon>mic</mat-icon>
-            </button>
-          }
-        </div>
+            <div class="input-wrapper">
+              <input 
+                type="text"
+                class="message-input"
+                placeholder="Escribe un mensaje aquí"
+                [(ngModel)]="newMessage"
+                (keyup.enter)="sendMessage()"
+                aria-label="Escribe un mensaje">
+            </div>
+
+            @if (newMessage.trim()) {
+              <button mat-icon-button class="send-button" (click)="sendMessage()" aria-label="Enviar">
+                <mat-icon>send</mat-icon>
+              </button>
+            } @else {
+              <button mat-icon-button class="action-button" aria-label="Mensaje de voz">
+                <mat-icon>mic</mat-icon>
+              </button>
+            }
+          </div>
+        }
       </div>
     } @else {
       <div class="empty-state">
@@ -671,6 +693,34 @@ import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
       border-top: 1px solid #e9edef;
     }
 
+    .input-area-blocked {
+      background: #f0f2f5;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 62px;
+      height: 62px;
+      flex-shrink: 0;
+      flex-grow: 0;
+      z-index: 2;
+      border-top: 1px solid #e9edef;
+    }
+
+    .blocked-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #667781;
+      font-size: 14px;
+    }
+
+    .blocked-message mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
     .action-button {
       color: #54656f;
       width: 40px;
@@ -792,7 +842,8 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
   constructor(
     private chatService: ChatService,
     private authService: AuthService,
-    private wsService: WebSocketService
+    private wsService: WebSocketService,
+    private dialog: MatDialog
   ) {
     effect(() => {
       const id = this.chatId();
@@ -874,7 +925,7 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
   }
 
   sendMessage(): void {
-    if (!this.newMessage.trim() || !this.currentChat) return;
+    if (!this.newMessage.trim() || !this.currentChat || this.currentChat.removed) return;
 
     const message = this.newMessage;
     this.newMessage = '';
@@ -926,5 +977,55 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
   selectEmoji(emoji: string): void {
     this.newMessage += emoji;
     this.showEmojiPicker = false;
+  }
+
+  addGroupMembers(): void {
+    if (!this.currentChat?.isGroup) return;
+
+    const dialogRef = this.dialog.open(AddMembersDialogComponent, {
+      width: '500px',
+      data: {
+        groupId: this.chatId(),
+        existingMembers: this.currentChat.participants?.map(p => p.id) || []
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(memberIds => {
+      if (memberIds && memberIds.length > 0) {
+        this.chatService.addGroupMembers(this.chatId(), memberIds).subscribe({
+          next: () => {
+            this.chatService.getChats().subscribe();
+          },
+          error: (err) => console.error('Error adding members:', err)
+        });
+      }
+    });
+  }
+
+  removeGroupMember(): void {
+    if (!this.currentChat?.isGroup) return;
+
+    const members = this.currentChat.participants.filter(p => p.id !== this.currentUserId);
+    
+    if (members.length === 0) {
+      alert('No hay otros miembros para eliminar.');
+      return;
+    }
+
+    const dialogRef = this.dialog.open(RemoveMemberDialogComponent, {
+      width: '500px',
+      data: { members }
+    });
+
+    dialogRef.afterClosed().subscribe(memberId => {
+      if (memberId) {
+        this.chatService.removeGroupMember(this.chatId(), memberId).subscribe({
+          next: () => {
+            this.chatService.getChats().subscribe();
+          },
+          error: (err) => console.error('Error removing member:', err)
+        });
+      }
+    });
   }
 }

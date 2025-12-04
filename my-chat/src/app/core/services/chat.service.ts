@@ -149,4 +149,17 @@ export class ChatService {
       })
     );
   }
+
+  addGroupMembers(groupId: string, memberIds: string[]): Observable<any> {
+    return this.http.post(`${this.apiUrl}/groups/${groupId}/members`, { memberIds });
+  }
+
+  removeGroupMember(groupId: string, memberId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/groups/${groupId}/members/${memberId}`);
+  }
+
+  isUserRemovedFromGroup(chatId: string): boolean {
+    const chat = this.chatsSubject.value.find(c => c.id === chatId);
+    return chat?.removed || false;
+  }
 }
