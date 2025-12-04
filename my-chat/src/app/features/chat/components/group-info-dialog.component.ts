@@ -6,12 +6,14 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { Chat } from '../../../models';
+import { ChatService } from '../../../core/services/chat.service';
 
 @Component({
   selector: 'app-group-info-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
   template: `
     <h2 mat-dialog-title>Información del grupo</h2>
     <mat-dialog-content>
@@ -71,6 +73,10 @@ import { Chat } from '../../../models';
                   <span class="member-name">{{ member.name }}</span>
                   @if (isUserAdmin(member.id)) {
                     <span class="admin-badge">Admin</span>
+                  } @else if (isAdmin) {
+                    <button mat-icon-button class="promote-btn" (click)="promoteToAdmin(member.id)" matTooltip="Hacer administrador">
+                      <mat-icon>admin_panel_settings</mat-icon>
+                    </button>
                   }
                 </div>
               </div>
@@ -210,6 +216,18 @@ import { Chat } from '../../../models';
       font-weight: 500;
     }
 
+    .promote-btn {
+      width: 32px;
+      height: 32px;
+      color: #00a884;
+    }
+
+    .promote-btn mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
     .member-avatar {
       width: 40px;
       height: 40px;
@@ -235,7 +253,8 @@ export class GroupInfoDialogComponent implements OnInit {
 
   constructor(
     public dialogRef: MatDialogRef<GroupInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { chat: Chat }
+    @Inject(MAT_DIALOG_DATA) public data: { chat: Chat },
+    private chatService: ChatService
   ) {}
 
   ngOnInit(): void {
@@ -277,5 +296,16 @@ export class GroupInfoDialogComponent implements OnInit {
 
   isUserAdmin(userId: string): boolean {
     return this.data.chat.admins?.includes(userId) || false;
+  }
+
+  promoteToAdmin(memberId: string): void {
+    if (!this.isAdmin) return;
+    
+    this.chatService.promoteToAdmin(this.data.chat.id, memberId).subscribe({
+      next: () => {
+        this.dialogRef.close({ reload: true });
+      },
+      error: (err) => console.error('Error promoting to admin:', err)
+    });
   }
 }

@@ -321,7 +321,6 @@ exports.updateInfo = async (event) => {
       };
     }
 
-    // Verificar que el usuario sea admin
     if (groupChat.role !== 'admin') {
       return {
         statusCode: 403,
@@ -374,3 +373,74 @@ exports.updateInfo = async (event) => {
     };
   }
 };
+
+exports.promoteToAdmin = async (event) => {
+  try {
+    const userId = event.requestContext.authorizer.claims.sub;
+    const { groupId, memberId } = event.pathParameters;
+
+    const groupResult = await docClient.send(new QueryCommand({
+      TableName: process.env.CHATS_TABLE,
+      IndexName: 'UserChatsIndex',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId }
+    }));
+
+    const groupChat = groupResult.Items?.find(c => c.groupId === groupId);
+    if (!groupChat) {
+      return {
+        statusCode: 404,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    if (groupChat.role !== 'admin') {
+      return {
+        statusCode: 403,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Only admins can promote members' })
+      };
+    }
+
+    const admins = groupChat.admins || [];
+    if (admins.includes(memberId)) {
+      return {
+        statusCode: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'User is already admin' })
+      };
+    }
+
+    const updatedAdmins = [...admins, memberId];
+    const members = groupChat.members || [];
+
+    await Promise.all(members.map(member =>
+      docClient.send(new UpdateCommand({
+        TableName: process.env.CHATS_TABLE,
+        Key: { chatId: `${groupId}#${member}` },
+        UpdateExpression: 'SET admins = :admins, #role = :role',
+        ExpressionAttributeNames: { '#role': 'role' },
+        ExpressionAttributeValues: {
+          ':admins': updatedAdmins,
+          ':role': updatedAdmins.includes(member) ? 'admin' : 'member'
+        }
+      }))
+    ));
+
+    return {
+      statusCode: 200,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ success: true, admins: updatedAdmins })
+    };
+  } catch (error) {
+    console.error('Error promoting to admin:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
+
+
