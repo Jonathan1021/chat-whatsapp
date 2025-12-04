@@ -1061,6 +1061,9 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
       if (memberId) {
         this.chatService.removeGroupMember(this.chatId(), memberId).subscribe({
           next: () => {
+            if (this.currentChat) {
+              this.currentChat.participants = this.currentChat.participants.filter(p => p.id !== memberId);
+            }
             this.chatService.getMessages(this.chatId()).subscribe();
           },
           error: (err) => console.error('Error removing member:', err)
