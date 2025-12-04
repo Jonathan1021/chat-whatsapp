@@ -1,14 +1,13 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { catchError, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 
-/**
- * Interceptor funcional (Angular 19 style)
- * Añade token de autenticación a las peticiones HTTP
- * PRODUCCIÓN: Obtener token real de localStorage o cookie
- */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const token = sessionStorage.getItem('token');
+  const router = inject(Router);
+  const authService = inject(AuthService);
 
   if (token) {
     const cloned = req.clone({
@@ -16,7 +15,16 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         Authorization: `Bearer ${token}`
       }
     });
-    return next(cloned);
+    
+    return next(cloned).pipe(
+      catchError((error: HttpErrorResponse) => {
+        if (error.status === 401) {
+          authService.logout();
+          router.navigate(['/login']);
+        }
+        return throwError(() => error);
+      })
+    );
   }
 
   return next(req);
