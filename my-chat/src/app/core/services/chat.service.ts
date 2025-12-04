@@ -201,6 +201,15 @@ export class ChatService {
     );
   }
 
+  leaveGroup(groupId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/groups/${groupId}/leave`, {}).pipe(
+      tap(() => {
+        const chats = this.chatsSubject.value.filter(c => c.id !== groupId);
+        this.chatsSubject.next(chats);
+      })
+    );
+  }
+
   isUserRemovedFromGroup(chatId: string): boolean {
     const chat = this.chatsSubject.value.find(c => c.id === chatId);
     return chat?.removed || false;

@@ -172,6 +172,17 @@ functions:
             type: COGNITO_USER_POOLS
             authorizerId: !Ref ApiGatewayAuthorizer
 
+  leaveGroup:
+    handler: src/handlers/groups.leaveGroup
+    events:
+      - http:
+          path: groups/{groupId}/leave
+          method: post
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId: !Ref ApiGatewayAuthorizer
+
   # Messages
   getMessages:
     handler: src/handlers/messages.getMessages

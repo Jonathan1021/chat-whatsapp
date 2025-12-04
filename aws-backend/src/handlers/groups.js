@@ -201,6 +201,145 @@ exports.addMembers = async (event) => {
   }
 };
 
+exports.leaveGroup = async (event) => {
+  try {
+    const userId = event.requestContext.authorizer.claims.sub;
+    const { groupId } = event.pathParameters;
+
+    const groupResult = await docClient.send(new QueryCommand({
+      TableName: process.env.CHATS_TABLE,
+      IndexName: 'UserChatsIndex',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId }
+    }));
+
+    const groupChat = groupResult.Items?.find(c => c.groupId === groupId);
+    if (!groupChat) {
+      return {
+        statusCode: 404,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Group not found' })
+      };
+    }
+
+    const members = groupChat.members || [];
+    const admins = groupChat.admins || [];
+    
+    // Si es el único miembro, eliminar el grupo completamente
+    if (members.length === 1) {
+      await docClient.send(new DeleteCommand({
+        TableName: process.env.CHATS_TABLE,
+        Key: { chatId: `${groupId}#${userId}` }
+      }));
+
+      return {
+        statusCode: 200,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ success: true, deleted: true })
+      };
+    }
+
+    const updatedMembers = members.filter(id => id !== userId);
+    let updatedAdmins = admins;
+
+    // Si es admin y es el único admin, asignar a otro miembro
+    if (admins.includes(userId) && admins.length === 1 && updatedMembers.length > 0) {
+      updatedAdmins = [updatedMembers[0]];
+    } else if (admins.includes(userId)) {
+      updatedAdmins = admins.filter(id => id !== userId);
+    }
+
+    // Actualizar todos los miembros restantes
+    await Promise.all(updatedMembers.map(member =>
+      docClient.send(new UpdateCommand({
+        TableName: process.env.CHATS_TABLE,
+        Key: { chatId: `${groupId}#${member}` },
+        UpdateExpression: 'SET members = :members, admins = :admins, #role = :role',
+        ExpressionAttributeNames: { '#role': 'role' },
+        ExpressionAttributeValues: {
+          ':members': updatedMembers,
+          ':admins': updatedAdmins,
+          ':role': updatedAdmins.includes(member) ? 'admin' : 'member'
+        }
+      }))
+    ));
+
+    // Eliminar el registro del usuario que sale
+    await docClient.send(new DeleteCommand({
+      TableName: process.env.CHATS_TABLE,
+      Key: { chatId: `${groupId}#${userId}` }
+    }));
+
+    // Obtener info del usuario que sale
+    const userInfo = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+
+    const userName = userInfo.Item?.name || 'Usuario';
+
+    // Crear mensaje de sistema
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = Date.now();
+    const systemMessage = {
+      messageId,
+      chatId: groupId,
+      senderId: userId,
+      senderName: userName,
+      content: `${userName} salió del grupo`,
+      timestamp,
+      type: 'system',
+      systemAction: 'member_left',
+      createdAt: new Date().toISOString()
+    };
+    
+    await docClient.send(new PutCommand({
+      TableName: process.env.MESSAGES_TABLE,
+      Item: systemMessage
+    }));
+
+    // Enviar mensaje via WebSocket
+    const { ApiGatewayManagementApiClient, PostToConnectionCommand } = require('@aws-sdk/client-apigatewaymanagementapi');
+    const domain = event.requestContext.domainName;
+    const stage = event.requestContext.stage;
+    const apiGateway = new ApiGatewayManagementApiClient({ endpoint: `https://${domain}/${stage}` });
+
+    const allConnections = await Promise.all(
+      updatedMembers.map(userId => 
+        docClient.send(new QueryCommand({
+          TableName: process.env.CONNECTIONS_TABLE,
+          IndexName: 'UserConnectionsIndex',
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': userId }
+        }))
+      )
+    );
+
+    const messageWithId = { ...systemMessage, id: messageId };
+    for (const result of allConnections) {
+      for (const connection of result.Items || []) {
+        await apiGateway.send(new PostToConnectionCommand({
+          ConnectionId: connection.connectionId,
+          Data: JSON.stringify({ type: 'message', data: messageWithId })
+        })).catch(() => {});
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ success: true, deleted: false })
+    };
+  } catch (error) {
+    console.error('Error leaving group:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
+
 exports.removeMember = async (event) => {
   try {
     const userId = event.requestContext.authorizer.claims.sub;

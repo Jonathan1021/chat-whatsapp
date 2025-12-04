@@ -105,10 +105,12 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                   <mat-icon>volume_off</mat-icon>
                   <span>Silenciar notificaciones</span>
                 </button>
-                <button mat-menu-item>
-                  <mat-icon>wallpaper</mat-icon>
-                  <span>Fondo de pantalla</span>
-                </button>
+                @if (currentChat && currentChat.isGroup) {
+                  <button mat-menu-item (click)="leaveGroup()">
+                    <mat-icon>exit_to_app</mat-icon>
+                    <span>Salir del grupo</span>
+                  </button>
+                }
               </mat-menu>
             </div>
           }
@@ -1122,8 +1124,20 @@ export class ChatDetailComponent implements OnInit, AfterViewChecked, OnDestroy 
         return `${message.senderName} nombró a ${message.affectedUserName} administrador`;
       case 'admin_demoted':
         return `${message.senderName} quitó a ${message.affectedUserName} como administrador`;
+      case 'member_left':
+        return `${message.senderName} salió del grupo`;
       default:
         return '';
+    }
+  }
+
+  leaveGroup(): void {
+    if (!this.currentChat?.isGroup) return;
+
+    if (confirm('¿Estás seguro de que quieres salir del grupo?')) {
+      this.chatService.leaveGroup(this.chatId()).subscribe({
+        error: (err) => console.error('Error leaving group:', err)
+      });
     }
   }
 }
