@@ -1,0 +1,24 @@
+# Environment files
+my-chat/src/environments/environment.ts
+my-chat/src/environments/environment.development.ts
+my-chat/src/environments/environment.prod.ts
+
+# Node modules
+node_modules/
+my-chat/node_modules/
+aws-backend/node_modules/
+
+# Build outputs
+my-chat/dist/
+my-chat/.angular/
+aws-backend/.serverless/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
