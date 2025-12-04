@@ -95,7 +95,7 @@ import { GroupInfoDialogComponent } from './group-info-dialog.component';
                       <span>Eliminar participante</span>
                     </button>
                   }
-                } @else {
+                } @else if (currentChat && !currentChat.isGroup) {
                   <button mat-menu-item>
                     <mat-icon>info</mat-icon>
                     <span>Info del contacto</span>
